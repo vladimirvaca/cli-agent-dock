@@ -12,6 +12,10 @@ dependencies {
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
         intellijIdea("2025.2.6.2")
+
+        // Bundled Terminal plugin - provides the embedded terminal used to host the agent CLI.
+        bundledPlugin("org.jetbrains.plugins.terminal")
+
         testFramework(TestFrameworkType.Platform)
     }
 }

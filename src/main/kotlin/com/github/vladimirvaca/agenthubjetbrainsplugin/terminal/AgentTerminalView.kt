@@ -1,0 +1,112 @@
+package com.github.vladimirvaca.agenthubjetbrainsplugin.terminal
+
+import com.github.vladimirvaca.agenthubjetbrainsplugin.AgentHubBundle
+import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBPanel
+import com.intellij.util.Alarm
+import com.intellij.util.ui.AnimatedIcon
+import com.intellij.util.ui.AsyncProcessIcon
+import com.intellij.util.ui.JBUI
+import java.awt.CardLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.io.File
+import javax.swing.Box
+import javax.swing.JComponent
+import javax.swing.SwingConstants
+
+/**
+ * Hosts the agent terminal and, while the agent is starting up, shows a loading card
+ * instead of the terminal so the user sees a spinner rather than the raw shell
+ * launching the CLI.
+ *
+ * A [CardLayout] keeps the terminal genuinely hidden (not merely covered) during
+ * startup, while its session runs eagerly in the background and renders at the correct
+ * size. Once an agent [ready marker][Agent.readyMarkers] appears in the output — or a
+ * timeout elapses — we flip to the terminal card, revealing the already-drawn agent.
+ */
+class AgentTerminalView(
+    project: Project,
+    parentDisposable: Disposable,
+    workingDirectory: String,
+    private val agent: Agent,
+    executable: File?,
+) : JBPanel<AgentTerminalView>(CardLayout()) {
+
+    private val cardLayout get() = layout as CardLayout
+
+    private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable)
+    private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("AgentHubStartup")
+    private val loader = createLoaderPanel()
+
+    private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
+    private val deadline = System.currentTimeMillis() + agent.readyTimeoutMs
+
+    init {
+        Disposer.register(parentDisposable, spinner)
+
+        add(widget.component, CARD_TERMINAL)
+        add(loader, CARD_LOADING)
+
+        if (agent.readyMarkers.isEmpty()) {
+            // Readiness cannot be detected for this agent; show the terminal directly.
+            showTerminal()
+        } else {
+            cardLayout.show(this, CARD_LOADING)
+            spinner.resume()
+            scheduleReadyCheck()
+        }
+    }
+
+    private fun scheduleReadyCheck() {
+        alarm.addRequest(::checkReady, POLL_INTERVAL_MS)
+    }
+
+    private fun checkReady() {
+        val output = widget.getText()
+        val ready = agent.readyMarkers.any { output.contains(it) }
+        if (ready || System.currentTimeMillis() >= deadline) {
+            showTerminal()
+        } else {
+            scheduleReadyCheck()
+        }
+    }
+
+    private fun showTerminal() {
+        if (spinner.isRunning) {
+            spinner.suspend()
+        }
+        Disposer.dispose(spinner)
+        cardLayout.show(this, CARD_TERMINAL)
+        widget.requestFocus()
+    }
+
+    private fun createLoaderPanel(): JComponent {
+        val content = Box.createVerticalBox().apply {
+            spinner.alignmentX = CENTER_ALIGNMENT
+            add(spinner)
+            add(Box.createVerticalStrut(JBUI.scale(12)))
+            add(JBLabel(AgentHubBundle["loader.starting", agent.displayName]).apply {
+                alignmentX = CENTER_ALIGNMENT
+                horizontalAlignment = SwingConstants.CENTER
+            })
+        }
+
+        return JBPanel<JBPanel<*>>(GridBagLayout()).apply {
+            isOpaque = true
+            background = EditorColorsManager.getInstance().globalScheme.defaultBackground
+            add(content, GridBagConstraints())
+        }
+    }
+
+    companion object {
+        private const val POLL_INTERVAL_MS = 150
+        private const val CARD_TERMINAL = "terminal"
+        private const val CARD_LOADING = "loading"
+    }
+}
