@@ -1,13 +1,13 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.toolWindow
+package com.github.vladimirvaca.cliagentdock.toolWindow
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.AgentHubBundle
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.AgentExecutableResolver
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.AgentRegistry
-import com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsConfigurable
-import com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsState
-import com.github.vladimirvaca.agenthubjetbrainsplugin.terminal.AgentTerminalView
-import com.github.vladimirvaca.agenthubjetbrainsplugin.util.IdeInfo
+import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
+import com.github.vladimirvaca.cliagentdock.agent.Agent
+import com.github.vladimirvaca.cliagentdock.agent.AgentExecutableResolver
+import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
+import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
+import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
+import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
+import com.github.vladimirvaca.cliagentdock.util.IdeInfo
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -30,10 +30,10 @@ import javax.swing.JComponent
 import javax.swing.SwingConstants
 
 /**
- * The right-anchored Agent Hub tool window content: a small toolbar to pick and
+ * The right-anchored CLI Agent Dock tool window content: a small toolbar to pick and
  * restart the agent, hosting an embedded terminal that runs the selected agent CLI.
  */
-class AgentHubToolWindowPanel(
+class CliAgentDockToolWindowPanel(
     private val project: Project,
     private val parentDisposable: Disposable,
 ) : SimpleToolWindowPanel(true, true) {
@@ -57,16 +57,16 @@ class AgentHubToolWindowPanel(
         }
 
         val controls = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(6))).apply {
-            add(JBLabel(AgentHubBundle["label.agent"]))
+            add(JBLabel(CliAgentDockBundle["label.agent"]))
             add(agentCombo)
-            add(JButton(AgentHubBundle["action.restart.text"]).apply {
+            add(JButton(CliAgentDockBundle["action.restart.text"]).apply {
                 addActionListener { relaunch() }
             })
         }
 
         val versionLabel = JBLabel(IdeInfo.describe()).apply {
             foreground = UIUtil.getContextHelpForeground()
-            toolTipText = AgentHubBundle["ide.version.tooltip"]
+            toolTipText = CliAgentDockBundle["ide.version.tooltip"]
         }
 
         val toolbar = BorderLayoutPanel().apply {
@@ -75,7 +75,7 @@ class AgentHubToolWindowPanel(
             addToRight(versionLabel)
         }
 
-        thisLogger().info("Agent Hub running in ${IdeInfo.describe()}")
+        thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")
 
         val root = BorderLayoutPanel()
         root.addToTop(toolbar)
@@ -92,7 +92,7 @@ class AgentHubToolWindowPanel(
 
         val executable = AgentExecutableResolver.resolve(agent)
         if (executable != null) {
-            val disposable = Disposer.newDisposable(parentDisposable, "AgentHubTerminalSession")
+            val disposable = Disposer.newDisposable(parentDisposable, "CliAgentDockTerminalSession")
             sessionDisposable = disposable
             val workingDir = project.basePath ?: System.getProperty("user.home")
             val view = AgentTerminalView(project, disposable, workingDir, agent, executable)
@@ -112,14 +112,14 @@ class AgentHubToolWindowPanel(
     }
 
     private fun createNotFoundPanel(agent: Agent): JComponent {
-        val message = JBLabel(AgentHubBundle["notFound.message", agent.displayName, agent.command]).apply {
+        val message = JBLabel(CliAgentDockBundle["notFound.message", agent.displayName, agent.command]).apply {
             horizontalAlignment = SwingConstants.CENTER
         }
         val buttons = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(8))).apply {
-            add(JButton(AgentHubBundle["notFound.retry"]).apply {
+            add(JButton(CliAgentDockBundle["notFound.retry"]).apply {
                 addActionListener { relaunch() }
             })
-            add(JButton(AgentHubBundle["notFound.openSettings"]).apply {
+            add(JButton(CliAgentDockBundle["notFound.openSettings"]).apply {
                 addActionListener {
                     ShowSettingsUtil.getInstance()
                         .showSettingsDialog(project, AgentSettingsConfigurable::class.java)

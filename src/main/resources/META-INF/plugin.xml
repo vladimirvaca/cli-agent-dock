@@ -1,38 +1,38 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.vladimirvaca.agenthubjetbrainsplugin</id>
-    <name>Agent Hub</name>
+    <id>com.github.vladimirvaca.cliagentdock</id>
+    <name>CLI Agent Dock</name>
     <vendor>vladimirvaca</vendor>
 
     <description><![CDATA[
-        <p><b>Agent Hub</b> brings your favorite coding agent right into your JetBrains IDE.
+        <p><b>CLI Agent Dock</b> brings your favorite coding agent right into your JetBrains IDE.
         It adds a tool window to the right side bar (next to Database, Gradle, and friends)
         with an embedded terminal that automatically launches a coding agent CLI in your project.</p>
         <p>By default it opens with <b>Claude Code</b>. You can choose a preferred agent and the
         choice is remembered across projects and restarts. Support for more agents
         (GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, and more) is on the roadmap.</p>
-        <p>Agent Hub is cross-platform and works on Windows, macOS, and Linux.</p>
+        <p>CLI Agent Dock is cross-platform and works on Windows, macOS, and Linux.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
 
-    <resource-bundle>messages.AgentHubBundle</resource-bundle>
+    <resource-bundle>messages.CliAgentDockBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
-            id="Agent Hub"
+            id="CLI Agent Dock"
             anchor="right"
-            icon="/icons/agentHub.svg"
-            factoryClass="com.github.vladimirvaca.agenthubjetbrainsplugin.toolWindow.AgentHubToolWindowFactory"/>
+            icon="/icons/cliAgentDock.svg"
+            factoryClass="com.github.vladimirvaca.cliagentdock.toolWindow.CliAgentDockToolWindowFactory"/>
 
         <applicationService
-            serviceImplementation="com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsState"/>
+            serviceImplementation="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState"/>
 
         <applicationConfigurable
             parentId="tools"
-            id="com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsConfigurable"
-            instance="com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsConfigurable"
-            displayName="Agent Hub"/>
+            id="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
+            instance="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
+            displayName="CLI Agent Dock"/>
     </extensions>
 </idea-plugin>

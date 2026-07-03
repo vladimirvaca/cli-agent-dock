@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Engineering guide for the **Agent Hub** JetBrains plugin. This file is the source
+Engineering guide for the **CLI Agent Dock** JetBrains plugin. This file is the source
 of truth for AI coding assistants (Claude Code, Copilot, Codex, etc.) and human
 contributors working on this repository. Read it before making changes.
 
@@ -8,7 +8,7 @@ contributors working on this repository. Read it before making changes.
 
 ## 1. What this plugin does
 
-Agent Hub adds a **tool window to the right side bar** of any JetBrains IDE
+CLI Agent Dock adds a **tool window to the right side bar** of any JetBrains IDE
 (IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider, etc.) that opens an embedded
 terminal already running a **coding agent CLI**.
 
@@ -26,7 +26,7 @@ working end-to-end with the architecture already generalized for more agents.
 ## 2. Current status
 
 **Milestone 1 is implemented.** The template sample code (`My*`) has been removed and
-replaced with the real feature: a right-anchored "Agent Hub" tool window that launches
+replaced with the real feature: a right-anchored "CLI Agent Dock" tool window that launches
 Claude Code in an embedded terminal, with a preferred-agent setting persisted globally,
 cross-platform executable resolution, and a startup loader. See §4 for the actual
 layout and §7 for what's done vs. next.
@@ -41,8 +41,8 @@ layout and §7 for what's done vs. next.
 | Build | Gradle (Kotlin DSL) + IntelliJ Platform Gradle Plugin `2.x` |
 | Target platform | IntelliJ IDEA `2025.2.6.2` (see `build.gradle.kts`) |
 | Kotlin plugin | `2.1.20` (see `settings.gradle.kts`) |
-| Plugin id | `com.github.vladimirvaca.agenthubjetbrainsplugin` |
-| Base package | `com.github.vladimirvaca.agenthubjetbrainsplugin` |
+| Plugin id | `com.github.vladimirvaca.cliagentdock` |
+| Base package | `com.github.vladimirvaca.cliagentdock` |
 | Min IDE build | `since-build` in `plugin.xml` (keep in sync with target) |
 
 ### Useful commands
@@ -64,11 +64,11 @@ The design is **agent-agnostic**: everything specific to Claude Code is data on 
 plumbing. Actual layout:
 
 ```
-AgentHubBundle.kt                i18n bundle object (messages/AgentHubBundle.properties).
+CliAgentDockBundle.kt                i18n bundle object (messages/CliAgentDockBundle.properties).
 
 toolWindow/
-  AgentHubToolWindowFactory.kt   ToolWindowFactory (DumbAware), anchored right.
-  AgentHubToolWindowPanel.kt     Panel: toolbar (agent picker, restart, IDE-version label)
+  CliAgentDockToolWindowFactory.kt   ToolWindowFactory (DumbAware), anchored right.
+  CliAgentDockToolWindowPanel.kt     Panel: toolbar (agent picker, restart, IDE-version label)
                                  + hosts the terminal view; handles relaunch and the
                                  "agent not found" state.
 
@@ -87,7 +87,7 @@ terminal/
 
 settings/
   AgentSettingsState.kt          PersistentStateComponent (APP level) storing preferred agent id.
-  AgentSettingsConfigurable.kt   Settings UI under Settings > Tools > Agent Hub.
+  AgentSettingsConfigurable.kt   Settings UI under Settings > Tools > CLI Agent Dock.
 
 util/
   IdeInfo.kt                     Reports the running IDE product/version/build.
@@ -95,8 +95,8 @@ util/
 
 ### 4.1 Tool window (right anchor)
 Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, etc.),
-`icon="/icons/agentHub.svg"` (13×13, with a `_dark` variant), factory
-`AgentHubToolWindowFactory`.
+`icon="/icons/cliAgentDock.svg"` (13×13, with a `_dark` variant), factory
+`CliAgentDockToolWindowFactory`.
 
 ### 4.2 Embedded terminal (verified API)
 - Depends on the bundled Terminal plugin: `<depends>org.jetbrains.plugins.terminal</depends>`
@@ -133,10 +133,10 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - Use `com.intellij.openapi.util.SystemInfo` for OS branching.
 
 ### 4.5 Persisting the preferred agent
-- Application-level `PersistentStateComponent` (`agentHub.xml`) — the preferred agent is
+- Application-level `PersistentStateComponent` (`cliAgentDock.xml`) — the preferred agent is
   a person-level choice, not per-project. Stores only the agent `id`; falls back to the
   default if the id is unknown/disabled. Default = Claude Code.
-- Both the tool-window picker and the `Configurable` (Settings > Tools > Agent Hub)
+- Both the tool-window picker and the `Configurable` (Settings > Tools > CLI Agent Dock)
   read/write this same state. (Changing it in Settings takes effect on the next
   open/Restart of the tool window — live relaunch on settings-apply is a future nicety.)
 
@@ -148,8 +148,8 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   `service<T>()` / `project.service<T>()`.
 - **No blocking on EDT.** Terminal creation and PATH probes must not freeze the UI;
   use the platform's background/coroutine facilities.
-- **i18n:** user-facing strings go through `AgentHubBundle`
-  (`messages/AgentHubBundle.properties`).
+- **i18n:** user-facing strings go through `CliAgentDockBundle`
+  (`messages/CliAgentDockBundle.properties`).
 - **Logging:** `thisLogger()`.
 - **Keep it agent-agnostic:** never scatter `"claude"` literals through the UI/terminal
   layers — route everything through `Agent` / `AgentRegistry` / settings.
@@ -166,7 +166,7 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 ## 7. Roadmap (do not build ahead of the current milestone)
 
 **Milestone 1 (done):**
-- [x] Right-anchored "Agent Hub" tool window.
+- [x] Right-anchored "CLI Agent Dock" tool window.
 - [x] Embedded terminal auto-launching Claude Code.
 - [x] Preferred-agent setting, persisted globally, default Claude Code.
 - [x] Cross-platform launch + "agent not found" handling (Win/macOS/Linux).

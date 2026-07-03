@@ -1,21 +1,21 @@
-# Agent Hub for JetBrains
+# CLI Agent Dock for JetBrains
 
-![Build](https://github.com/vladimirvaca/agent-hub-jetbrains-plugin/workflows/Build/badge.svg)
+![Build](https://github.com/vladimirvaca/cli-agent-dock/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
 <!-- Plugin description -->
-**Agent Hub** brings your favorite coding agent right into your JetBrains IDE. It
+**CLI Agent Dock** brings your favorite coding agent right into your JetBrains IDE. It
 adds a dedicated tool window to the **right side bar** — next to Database, Gradle,
 and friends — with an embedded terminal that automatically launches a coding agent
 CLI, ready to work in your project.
 
 By default it opens with **Claude Code**. Prefer a different agent? Pick it in the
-settings and Agent Hub **remembers your choice** across projects and restarts.
+settings and CLI Agent Dock **remembers your choice** across projects and restarts.
 Support for more agents (GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, and more)
 is on the roadmap.
 
-Agent Hub is **cross-platform** and works on **Windows, macOS, and Linux**.
+CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 <!-- Plugin description end -->
 
 ---
@@ -33,7 +33,7 @@ Agent Hub is **cross-platform** and works on **Windows, macOS, and Linux**.
 
 ## Roadmap
 
-Agent Hub is meant to be a *hub* for many coding agents. Planned:
+CLI Agent Dock is meant to be a *hub* for many coding agents. Planned:
 
 - Additional agents: GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, and others.
 - Multiple concurrent agent sessions / terminal tabs.
@@ -53,22 +53,22 @@ Agent Hub is meant to be a *hub* for many coding agents. Planned:
     [Claude Code documentation](https://docs.claude.com/en/docs/claude-code)
     and verify with `claude --version` in your terminal.
 
-If the selected agent's CLI can't be found, Agent Hub will tell you instead of
+If the selected agent's CLI can't be found, CLI Agent Dock will tell you instead of
 opening a broken terminal.
 
 ## Usage
 
-1. Open the **Agent Hub** tool window from the **right** side bar.
+1. Open the **CLI Agent Dock** tool window from the **right** side bar.
 2. A terminal opens in your project directory and launches your preferred agent
    (Claude Code by default).
-3. To change the agent, go to **Settings/Preferences > Tools > Agent Hub** and pick
+3. To change the agent, go to **Settings/Preferences > Tools > CLI Agent Dock** and pick
    your preferred agent. Your choice is remembered for next time.
 
 ## Installation
 
 - Using the IDE built-in plugin system:
 
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "Agent Hub"</kbd> >
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "CLI Agent Dock"</kbd> >
   <kbd>Install</kbd>
 
 - Using JetBrains Marketplace:
@@ -80,7 +80,7 @@ opening a broken terminal.
 
 - Manually:
 
-  Download the [latest release](https://github.com/vladimirvaca/agent-hub-jetbrains-plugin/releases/latest) and install it manually using
+  Download the [latest release](https://github.com/vladimirvaca/cli-agent-dock/releases/latest) and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 ## Development

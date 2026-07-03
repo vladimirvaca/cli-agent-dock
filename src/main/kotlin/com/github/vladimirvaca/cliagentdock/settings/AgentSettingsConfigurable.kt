@@ -1,8 +1,8 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.settings
+package com.github.vladimirvaca.cliagentdock.settings
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.AgentHubBundle
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.AgentRegistry
+import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
+import com.github.vladimirvaca.cliagentdock.agent.Agent
+import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.SimpleListCellRenderer
@@ -11,7 +11,7 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 /**
- * Settings page under Settings > Tools > Agent Hub for choosing the preferred
+ * Settings page under Settings > Tools > CLI Agent Dock for choosing the preferred
  * agent. Writes to the same application-level [AgentSettingsState] used by the
  * tool window, so the choice is remembered globally.
  */
@@ -20,7 +20,7 @@ class AgentSettingsConfigurable : Configurable {
     private val settings = AgentSettingsState.getInstance()
     private var combo: ComboBox<Agent>? = null
 
-    override fun getDisplayName(): String = AgentHubBundle["settings.displayName"]
+    override fun getDisplayName(): String = CliAgentDockBundle["settings.displayName"]
 
     override fun createComponent(): JComponent {
         val box = ComboBox(AgentRegistry.enabledAgents.toTypedArray()).apply {
@@ -30,7 +30,7 @@ class AgentSettingsConfigurable : Configurable {
         combo = box
 
         return FormBuilder.createFormBuilder()
-            .addLabeledComponent(AgentHubBundle["settings.preferredAgent"], box, false)
+            .addLabeledComponent(CliAgentDockBundle["settings.preferredAgent"], box, false)
             .addComponentFillVertically(JPanel(), 0)
             .panel
     }

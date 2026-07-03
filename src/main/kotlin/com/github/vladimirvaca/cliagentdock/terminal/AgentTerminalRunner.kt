@@ -1,6 +1,6 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.terminal
+package com.github.vladimirvaca.cliagentdock.terminal
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
+import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.terminal.ui.TerminalWidget

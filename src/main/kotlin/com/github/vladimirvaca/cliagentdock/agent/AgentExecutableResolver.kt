@@ -1,4 +1,4 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.agent
+package com.github.vladimirvaca.cliagentdock.agent
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.openapi.util.SystemInfo

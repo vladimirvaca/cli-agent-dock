@@ -1,4 +1,4 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.agent
+package com.github.vladimirvaca.cliagentdock.agent
 
 /**
  * Describes a coding agent that can be launched inside the embedded terminal.

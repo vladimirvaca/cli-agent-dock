@@ -1,4 +1,4 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.util
+package com.github.vladimirvaca.cliagentdock.util
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationNamesInfo

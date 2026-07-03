@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "agent-hub-jetbrains-plugin"
+rootProject.name = "cli-agent-dock"
 
 pluginManagement {
     plugins {

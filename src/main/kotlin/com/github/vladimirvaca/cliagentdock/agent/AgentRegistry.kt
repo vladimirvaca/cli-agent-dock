@@ -1,4 +1,4 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.agent
+package com.github.vladimirvaca.cliagentdock.agent
 
 /**
  * Central catalog of known agents. Claude Code is the default and only enabled

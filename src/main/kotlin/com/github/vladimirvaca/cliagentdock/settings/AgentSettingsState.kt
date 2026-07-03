@@ -1,7 +1,7 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.settings
+package com.github.vladimirvaca.cliagentdock.settings
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.AgentRegistry
+import com.github.vladimirvaca.cliagentdock.agent.Agent
+import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
@@ -14,7 +14,7 @@ import com.intellij.openapi.components.service
  * restarts and projects. Only the stable agent [id][Agent.id] is persisted.
  */
 @Service(Service.Level.APP)
-@State(name = "AgentHubSettings", storages = [Storage("agentHub.xml")])
+@State(name = "CliAgentDockSettings", storages = [Storage("cliAgentDock.xml")])
 class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
     class State {

@@ -1,10 +1,10 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin
+package com.github.vladimirvaca.cliagentdock
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.AgentRegistry
-import com.github.vladimirvaca.agenthubjetbrainsplugin.settings.AgentSettingsState
+import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
+import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
-class AgentHubTest : BasePlatformTestCase() {
+class CliAgentDockTest : BasePlatformTestCase() {
 
     fun testDefaultAgentIsClaudeCode() {
         val default = AgentRegistry.default()

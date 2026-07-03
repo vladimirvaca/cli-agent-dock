@@ -1,7 +1,7 @@
-package com.github.vladimirvaca.agenthubjetbrainsplugin.terminal
+package com.github.vladimirvaca.cliagentdock.terminal
 
-import com.github.vladimirvaca.agenthubjetbrainsplugin.AgentHubBundle
-import com.github.vladimirvaca.agenthubjetbrainsplugin.agent.Agent
+import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
+import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
@@ -41,7 +41,7 @@ class AgentTerminalView(
     private val cardLayout get() = layout as CardLayout
 
     private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable)
-    private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("AgentHubStartup")
+    private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("CliAgentDockStartup")
     private val loader = createLoaderPanel()
 
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
@@ -91,7 +91,7 @@ class AgentTerminalView(
             spinner.alignmentX = CENTER_ALIGNMENT
             add(spinner)
             add(Box.createVerticalStrut(JBUI.scale(12)))
-            add(JBLabel(AgentHubBundle["loader.starting", agent.displayName]).apply {
+            add(JBLabel(CliAgentDockBundle["loader.starting", agent.displayName]).apply {
                 alignmentX = CENTER_ALIGNMENT
                 horizontalAlignment = SwingConstants.CENTER
             })
