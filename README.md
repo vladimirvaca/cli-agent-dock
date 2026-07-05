@@ -4,19 +4,19 @@
 [![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
-<!-- Plugin description -->
+<!-- The Marketplace plugin description is maintained directly in src/main/resources/META-INF/plugin.xml -->
 **CLI Agent Dock** brings your favorite coding agent right into your JetBrains IDE. It
 adds a dedicated tool window to the **right side bar** — next to Database, Gradle,
 and friends — with an embedded terminal that automatically launches a coding agent
 CLI, ready to work in your project.
 
-By default it opens with **Claude Code**. Prefer a different agent? Pick it in the
-settings and CLI Agent Dock **remembers your choice** across projects and restarts.
-Support for more agents (GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, and more)
-is on the roadmap.
+By default it opens with **Claude Code**, and **GitHub Copilot CLI** is supported too.
+Pick an agent from the dropdown and open as many sessions as you like — each runs in
+its own closeable tab. Your preferred agent is **remembered** across projects and
+restarts. Support for more agents (OpenAI Codex CLI, OpenCode, and more) is on the
+roadmap.
 
 CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
-<!-- Plugin description end -->
 
 ---
 
@@ -96,7 +96,8 @@ This plugin is built with Kotlin and the
 ```
 
 See [AGENTS.md](./AGENTS.md) for the architecture, conventions, and contribution
-guidelines.
+guidelines, and [RELEASING.md](./RELEASING.md) for the versioning strategy and
+release process.
 
 ---
 Plugin based on the [IntelliJ Platform Plugin Template][template].
