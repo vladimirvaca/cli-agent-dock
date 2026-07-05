@@ -110,9 +110,32 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
     → returns `com.intellij.terminal.ui.TerminalWidget`.
   - `widget.sendCommandToExecute(cmd)` — queues the command until the shell is ready.
   - `widget.getText()` — live terminal buffer, polled for the readiness marker.
+  - `widget.addTerminationCallback(Runnable, Disposable)` — fires when the PTY process
+    ends; the deterministic signal for auto-closing the tab (§4.4). Prefer it over
+    `widget.isCommandRunning()`, whose interface **default just returns `false`** (verified
+    by decompilation) and is only meaningfully overridden by some concrete widgets.
 - We start a normal shell and send the agent command to it (rather than replacing the
-  shell with the agent), so the terminal survives the agent exiting and stays cross-platform.
+  shell with the agent) so the agent inherits the user's profile PATH/env, and stay
+  cross-platform. The command is exit-wrapped so the shell ends with the agent (§4.4).
 - Working directory defaults to `project.basePath` (fallback: user home).
+
+### 4.4 Auto-close the tab when the agent exits
+- Goal: when the agent CLI ends (Ctrl+C-and-quit, EOF, its own `/exit`/`q`, or a crash),
+  the hosting terminal tab closes instead of dropping to a bare shell prompt. **Always
+  close**, regardless of exit code.
+- Because the agent runs *inside* an interactive shell, the shell must end with the agent.
+  `AgentTerminalRunner.exitWrappedCommand` wraps the command per the configured shell
+  (`TerminalProjectOptionsProvider.shellPath`): `exec <cmd>` for POSIX (bash/zsh/fish, incl.
+  Git Bash — robust for Ctrl+C, preserves the already-sourced env), `& <cmd>; exit` for
+  PowerShell, `<cmd> & exit` for cmd.exe. An unrecognized shell is left unwrapped (the old
+  survive-the-agent behavior) so it degrades gracefully.
+- `AgentTerminalView` takes an `onExit` callback fired **at most once, on the EDT**, from two
+  sources: (1) the primary `addTerminationCallback`, and (2) a slow `isCommandRunning` poll
+  as a best-effort net for an agent hard-killed before the trailing `exit` runs — guarded by
+  a "seen running once" flag so a `false`-stub `isCommandRunning` can never close a tab.
+- `CliAgentDockToolWindowPanel.AgentSession` closes the tab on `onExit`, guarded by a
+  `closed` flag (idempotent) and a `liveView` identity check so a **Restart** (which disposes
+  the old view) doesn't let a stale termination callback close the restarted tab.
 
 ### 4.3 Startup loader / readiness — **the spinner pattern (every agent must follow it)**
 - `AgentTerminalView` uses a `CardLayout` with a "loading" card (a big
@@ -196,6 +219,7 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - [x] GitHub Copilot CLI as an enabled `AgentRegistry` entry (cross-OS, incl. WinGet), with
       the readiness spinner (§4.3).
 - [x] Multiple concurrent agent sessions in closeable tabs (New Session button + picker).
+- [x] Auto-close a session tab when its agent exits (§4.4).
 
 **Later:**
 - Additional agents (Codex CLI, OpenCode, …) as `AgentRegistry` entries.

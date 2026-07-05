@@ -154,6 +154,15 @@ class CliAgentDockToolWindowPanel(
 
         val header: JComponent = createHeader()
         private var disposable: Disposable? = null
+        private var closed = false
+
+        /**
+         * The terminal view whose agent exit should close this tab. Cleared/replaced right
+         * before a view is intentionally torn down (restart) so that view's late termination
+         * callback — which may arrive after we've already swapped in a new session — is ignored
+         * rather than closing the tab we just restarted.
+         */
+        private var liveView: AgentTerminalView? = null
 
         fun open() {
             val content = createContent()
@@ -173,6 +182,9 @@ class CliAgentDockToolWindowPanel(
         }
 
         fun close() {
+            if (closed) return
+            closed = true
+            liveView = null
             val index = tabs.indexOfTabComponent(header)
             disposeSession()
             if (index >= 0) tabs.removeTabAt(index)
@@ -181,14 +193,19 @@ class CliAgentDockToolWindowPanel(
 
         private fun createContent(): JComponent {
             val executable = AgentExecutableResolver.resolve(agent)
-            return if (executable != null) {
-                val sessionDisposable = Disposer.newDisposable(parentDisposable, "CliAgentDockTerminalSession")
-                disposable = sessionDisposable
-                val workingDir = project.basePath ?: System.getProperty("user.home")
-                AgentTerminalView(project, sessionDisposable, workingDir, agent, executable)
-            } else {
-                createNotFoundPanel(agent, onRetry = ::restart)
+            if (executable == null) {
+                return createNotFoundPanel(agent, onRetry = ::restart)
             }
+            val sessionDisposable = Disposer.newDisposable(parentDisposable, "CliAgentDockTerminalSession")
+            disposable = sessionDisposable
+            val workingDir = project.basePath ?: System.getProperty("user.home")
+            lateinit var view: AgentTerminalView
+            view = AgentTerminalView(project, sessionDisposable, workingDir, agent, executable) {
+                // Only the current view may close the tab; a replaced (restarted) view's exit is stale.
+                if (liveView === view) close()
+            }
+            liveView = view
+            return view
         }
 
         private fun disposeSession() {
