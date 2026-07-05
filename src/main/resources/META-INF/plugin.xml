@@ -1,19 +1,40 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.vladimirvaca.agenthubjetbrainsplugin</id>
-    <name>agent-hub-jetbrains-plugin</name>
+    <id>com.github.vladimirvaca.cliagentdock</id>
+    <name>CLI Agent Dock</name>
     <vendor>vladimirvaca</vendor>
+
     <description><![CDATA[
-        <p><b>agent-hub-jetbrains-plugin</b> is a repository that provides a pure template to make it easier to create a new plugin project.</p>
-        <p>The main goal of this template is to speed up the setup phase of plugin development for both new and experienced developers by preconfiguring the project scaffold and CI, linking to the proper documentation pages, and keeping everything organized.</p>
+        <p><b>CLI Agent Dock</b> brings your favorite coding agent right into your JetBrains IDE.
+        It adds a tool window to the right side bar (next to Database, Gradle, and friends)
+        with an embedded terminal that automatically launches a coding agent CLI in your project.</p>
+        <p>By default it opens with <b>Claude Code</b>, and <b>GitHub Copilot CLI</b> is supported
+        too. Pick an agent from the dropdown and open as many sessions as you like — each runs
+        in its own closeable tab, so you can drive several agents at once. Your preferred agent is
+        remembered across projects and restarts. Support for more agents
+        (OpenAI Codex CLI, OpenCode, and more) is on the roadmap.</p>
+        <p>CLI Agent Dock is cross-platform and works on Windows, macOS, and Linux.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.CliAgentDockBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.vladimirvaca.agenthubjetbrainsplugin.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.vladimirvaca.agenthubjetbrainsplugin.startup.MyProjectActivity" />
+        <toolWindow
+            id="CLI Agent Dock"
+            anchor="right"
+            icon="/icons/cliAgentDock.svg"
+            factoryClass="com.github.vladimirvaca.cliagentdock.toolWindow.CliAgentDockToolWindowFactory"/>
+
+        <applicationService
+            serviceImplementation="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState"/>
+
+        <applicationConfigurable
+            parentId="tools"
+            id="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
+            instance="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
+            displayName="CLI Agent Dock"/>
     </extensions>
 </idea-plugin>

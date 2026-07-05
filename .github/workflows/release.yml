@@ -1,63 +1,72 @@
-# GitHub Actions Workflow created for handling the release process based on the draft release prepared with the Build workflow.
-# Running the publishPlugin task requires all the following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
-# See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
+# Release workflow, triggered by pushing a version tag (e.g. 'v0.1.0'):
+# - Verifies the tag matches the version in gradle.properties.
+# - Extracts the release notes for exactly that version from CHANGELOG.md
+#   (fails if 'patchChangelog' was not run before tagging).
+# - Builds and signs the plugin, publishes it to JetBrains Marketplace,
+#   and creates a GitHub Release with the plugin ZIP attached.
+#
+# Required repository secrets: PUBLISH_TOKEN, CERTIFICATE_CHAIN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD.
+# See RELEASING.md for the full release procedure and one-time setup.
 
 name: Release
 on:
-  release:
-    types: [ prereleased, released ]
+  push:
+    tags: [ 'v*' ]
 
 jobs:
 
-  # Prepare and publish the plugin to JetBrains Marketplace repository
   release:
     name: Publish Plugin
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
 
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
-
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.release.tag_name }}
 
-      # Set up the Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: zulu
           java-version: 21
 
-      # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: true
 
-      # Update the Unreleased section with the current release note
-      - name: Patch Changelog
-        if: ${{ github.event.release.body != '' }}
-        env:
-          CHANGELOG: ${{ github.event.release.body }}
+      # Fail fast if the tag does not match the version in gradle.properties
+      - name: Verify tag matches project version
         run: |
-          RELEASE_NOTE="./build/tmp/release_note.txt"
-          mkdir -p "$(dirname "$RELEASE_NOTE")"
-          echo "$CHANGELOG" > $RELEASE_NOTE
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROP_VERSION="$(sed -n 's/^version *= *//p' gradle.properties | tr -d '[:space:]')"
+          echo "tag=$TAG_VERSION gradle.properties=$PROP_VERSION"
+          if [ "$TAG_VERSION" != "$PROP_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match gradle.properties version $PROP_VERSION"
+            exit 1
+          fi
 
-          ./gradlew patchChangelog --release-note-file=$RELEASE_NOTE
+      # Extract this version's changelog section. Also guards that 'patchChangelog'
+      # was run before tagging: fails if CHANGELOG.md has no section for the version.
+      - name: Extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./gradlew getChangelog --project-version="$VERSION" --no-header --no-summary \
+            --console=plain --quiet --output-file=build/release_notes.md
+          echo "--- release notes ---"
+          cat build/release_notes.md
 
-      # Publish the plugin to JetBrains Marketplace
-      - name: Publish Plugin
+      - name: Build and sign plugin
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew buildPlugin signPlugin
+
+      # Publish to Marketplace before creating the GitHub Release: a failed publish
+      # aborts the release, while a failed 'gh release create' is easy to redo by hand.
+      - name: Publish to JetBrains Marketplace
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
@@ -65,36 +74,11 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew publishPlugin
 
-      # Upload an artifact as a release asset
-      - name: Upload Release Asset
+      - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
-
-      # Create a pull request
-      - name: Create Pull Request
-        if: ${{ github.event.release.body != '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          BRANCH="changelog-update-$VERSION"
-          LABEL="release changelog"
-
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-
-          git checkout -b $BRANCH
-          git commit -am "Changelog update - $VERSION"
-          git push --set-upstream origin $BRANCH
-
-          gh label create "$LABEL" \
-            --description "Pull requests with release changelog update" \
-            --force \
-            || true
-
-          gh pr create \
-            --title "Changelog update - \`$VERSION\`" \
-            --body "Current pull request contains patched \`CHANGELOG.md\` file for the \`$VERSION\` version." \
-            --label "$LABEL" \
-            --head $BRANCH
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file build/release_notes.md \
+            build/distributions/*.zip
