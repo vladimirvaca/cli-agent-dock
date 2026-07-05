@@ -68,9 +68,11 @@ CliAgentDockBundle.kt                i18n bundle object (messages/CliAgentDockBu
 
 toolWindow/
   CliAgentDockToolWindowFactory.kt   ToolWindowFactory (DumbAware), anchored right.
-  CliAgentDockToolWindowPanel.kt     Panel: toolbar (agent picker, restart, IDE-version label)
-                                 + hosts the terminal view; handles relaunch and the
-                                 "agent not found" state.
+  CliAgentDockToolWindowPanel.kt     Panel: toolbar (agent picker, New Session, Restart,
+                                 IDE-version label) + a JBTabbedPane of terminal views.
+                                 Each closeable tab is an independent agent session
+                                 (own Disposable); handles restart and the "agent not
+                                 found" state per tab.
 
 agent/
   Agent.kt                       Model: id, displayName, command, args, enabled,
@@ -112,21 +114,35 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   shell with the agent), so the terminal survives the agent exiting and stays cross-platform.
 - Working directory defaults to `project.basePath` (fallback: user home).
 
-### 4.3 Startup loader / readiness
+### 4.3 Startup loader / readiness — **the spinner pattern (every agent must follow it)**
 - `AgentTerminalView` uses a `CardLayout` with a "loading" card (a big
-  `AsyncProcessIcon`) and a "terminal" card. The terminal starts **eagerly**
-  (`defer = false`) so it boots and renders at correct size while hidden.
+  `AsyncProcessIcon` spinner) and a "terminal" card. The terminal starts **eagerly**
+  (`defer = false`) so it boots and renders at correct size while hidden behind the spinner.
 - An `Alarm` polls `widget.getText()` for any `Agent.readyMarkers` substring; on match
-  (or after `Agent.readyTimeoutMs`, default 15s) it flips to the terminal card and
-  focuses it. Agents with no markers show the terminal directly (no loader).
-- Claude Code markers: `"? for shortcuts"`, `"Welcome to Claude Code"`. These are
-  version-sensitive; the timeout is the safety net if they change.
+  (or after `Agent.readyTimeoutMs`, default 15s) it removes the spinner, flips to the
+  terminal card and focuses it. This logic is **fully generic** — an agent opts in purely
+  by supplying `readyMarkers`; there is no per-agent code in `AgentTerminalView`.
+- **When adding a new agent, always give it `readyMarkers`** so it gets the same
+  loading-spinner UX as Claude Code. Rules for choosing them (see the KDoc on
+  `Agent.readyMarkers` for the authoritative contract):
+  1. Use strings that appear only once the interactive UI has finished painting — a
+     stable header/footer hint, not transient boot logs.
+  2. They must **not** be substrings of the launch command line. The shell echoes the
+     command (an **absolute path**) into the buffer, so a marker contained in it matches
+     instantly and skips the spinner. Match is **case-sensitive** — exploit that.
+  3. They are version-sensitive/best-effort; `readyTimeoutMs` is the safety net. Leaving
+     `readyMarkers` empty is allowed but means **no spinner** (terminal shows immediately).
+- Known markers:
+  - Claude Code: `"? for shortcuts"`, `"Welcome to Claude Code"`.
+  - GitHub Copilot CLI: `"GitHub Copilot"`, `"/help"`, `"/login"` (spaced "GitHub
+    Copilot" is safe because the launch path contains the dotted `GitHub.Copilot`).
 
 ### 4.4 Multiplatform rules
 - Do **not** hardcode `/bin/bash`, `cmd.exe`, or absolute shell paths. The Terminal
   plugin picks the user's default shell; we only send the agent command to it.
 - Executable resolution (`AgentExecutableResolver`): try `PathEnvironmentVariableUtil.findInPath`
-  first, then well-known install dirs (`~/.local/bin`, npm global, Homebrew, etc.),
+  first, then well-known install dirs (`~/.local/bin`, npm global, Homebrew, and on Windows
+  the WinGet `Links` shim dir + each `WinGet\Packages\<id>\` portable-package dir),
   honoring Windows `.exe`/`.cmd`/`.bat`. **Launch by absolute path** so a stale/minimal
   IDE PATH (common with `runIde` sandboxes and GUI-launched IDEs) doesn't cause a false
   "not found" or a broken terminal. If unresolved, show the friendly not-found panel.
@@ -176,12 +192,16 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 > Verified on Windows (`claude` at `~/.local/bin`). macOS/Linux paths are handled in
 > `AgentExecutableResolver` but not yet verified on those OSes.
 
+**Done since Milestone 1:**
+- [x] GitHub Copilot CLI as an enabled `AgentRegistry` entry (cross-OS, incl. WinGet), with
+      the readiness spinner (§4.3).
+- [x] Multiple concurrent agent sessions in closeable tabs (New Session button + picker).
+
 **Later:**
-- Additional agents (Copilot CLI, Codex CLI, OpenCode, …) as `AgentRegistry` entries.
+- Additional agents (Codex CLI, OpenCode, …) as `AgentRegistry` entries.
 - Live relaunch when the preferred agent changes in Settings.
-- Multiple concurrent agent terminals / tabs.
 - Per-agent config (model, flags, env), custom/user-defined agents.
-- Quick actions (restart agent, new session, open docs).
+- Quick actions (open docs, etc.).
 
 ---
 

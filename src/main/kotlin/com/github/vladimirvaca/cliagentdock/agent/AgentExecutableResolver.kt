@@ -41,11 +41,22 @@ object AgentExecutableResolver {
     private fun candidateDirs(): List<File> {
         val home = File(System.getProperty("user.home"))
         return if (SystemInfo.isWindows) {
-            listOfNotNull(
-                File(home, ".local/bin"),
-                System.getenv("APPDATA")?.let { File(it, "npm") },
-                System.getenv("LOCALAPPDATA")?.let { File(it, "Programs") },
-            )
+            buildList {
+                add(File(home, ".local/bin"))
+                System.getenv("APPDATA")?.let { add(File(it, "npm")) }
+                System.getenv("LOCALAPPDATA")?.let { localAppData ->
+                    add(File(localAppData, "Programs"))
+                    // WinGet installs: the Links shim dir, plus each portable package's
+                    // own directory. Tools like GitHub Copilot CLI drop copilot.exe
+                    // straight into Packages\<id>\ and add that dir (not Links) to PATH,
+                    // which a GUI-launched IDE's stale PATH snapshot often misses.
+                    val winget = File(localAppData, "Microsoft\\WinGet")
+                    add(File(winget, "Links"))
+                    File(winget, "Packages").listFiles()
+                        ?.filter { it.isDirectory }
+                        ?.let { addAll(it) }
+                }
+            }
         } else {
             listOf(
                 File(home, ".local/bin"),

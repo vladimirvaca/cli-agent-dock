@@ -20,8 +20,19 @@ data class Agent(
     val enabled: Boolean = true,
     /**
      * Substrings that, when they appear in the terminal output, indicate the agent's
-     * interactive UI is ready. While none has appeared a loader covers the terminal.
-     * Empty means readiness cannot be detected, so no loader is shown.
+     * interactive UI is ready. While none has appeared a loading spinner covers the
+     * terminal (see AgentTerminalView); once one matches — or [readyTimeoutMs] elapses —
+     * the spinner is removed and the terminal revealed. Empty means readiness cannot be
+     * detected, so no spinner is shown and the terminal appears immediately.
+     *
+     * Contract for every new agent (keep the spinner behaving like Claude Code):
+     *  - Pick strings that appear only once the interactive UI has finished painting
+     *    (e.g. a header/footer hint), not transient boot logs.
+     *  - They must NOT be substrings of the launch command line — the shell echoes the
+     *    command (an absolute path, see [commandLineFor]) into the buffer, so a marker
+     *    contained in it would match instantly and skip the spinner. Prefer distinctive,
+     *    case-sensitive phrases; match is case-sensitive.
+     *  - Treat them as best-effort/version-sensitive; [readyTimeoutMs] is the safety net.
      */
     val readyMarkers: List<String> = emptyList(),
     /** Maximum time to keep the loader before revealing the terminal anyway. */

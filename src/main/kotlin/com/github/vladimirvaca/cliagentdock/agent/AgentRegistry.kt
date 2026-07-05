@@ -16,7 +16,20 @@ object AgentRegistry {
             command = "claude",
             readyMarkers = listOf("? for shortcuts", "Welcome to Claude Code"),
         ),
-        Agent(id = "github-copilot", displayName = "GitHub Copilot CLI", command = "copilot", enabled = false),
+        Agent(
+            id = "github-copilot",
+            displayName = "GitHub Copilot CLI",
+            // `copilot`, installed cross-platform via `npm i -g @github/copilot`, Homebrew,
+            // WinGet, or the install script. AgentExecutableResolver already probes those
+            // locations (npm global bin, Homebrew, ~/.local/bin, WinGet) on Windows/macOS/Linux.
+            command = "copilot",
+            // Strings from the interactive TUI's header/footer. They must appear once the
+            // UI is ready and must NOT occur in the launch command echo — Copilot launches
+            // by absolute path (…\GitHub.Copilot_…\copilot.exe), so the spaced "GitHub
+            // Copilot" and the slash-command hints are safe. The readyTimeout is the net
+            // if a release changes them. See the "readiness" pattern in AGENTS.md §4.3.
+            readyMarkers = listOf("GitHub Copilot", "/help", "/login"),
+        ),
         Agent(id = "openai-codex", displayName = "OpenAI Codex CLI", command = "codex", enabled = false),
         Agent(id = "opencode", displayName = "OpenCode", command = "opencode", enabled = false),
     )
