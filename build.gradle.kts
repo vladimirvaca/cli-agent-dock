@@ -10,6 +10,14 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
+
+    compilerOptions {
+        // Kotlin 2.2+ changed the -jvm-default mode, which makes the compiler emit
+        // bridge overrides for ToolWindowFactory's default methods (getIcon, getAnchor,
+        // manage, ...). Plugin Verifier then flags them as internal API usages (MP-7604).
+        // no-compatibility skips those bridges and relies on real JVM default methods.
+        jvmDefault = org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 dependencies {
