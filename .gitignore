@@ -5,3 +5,7 @@
 .kotlin
 build
 .claude
+
+# Plugin signing material (see RELEASING.md) — never commit
+*.pem
+*.crt

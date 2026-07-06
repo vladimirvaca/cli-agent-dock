@@ -3,7 +3,11 @@
 # cli-agent-dock Changelog
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-07-05
+
 ### Added
+
 - Right-anchored **CLI Agent Dock** tool window hosting an embedded terminal.
 - Auto-launch of the preferred coding agent (default: Claude Code) in the project directory.
 - Application-level setting to choose the preferred agent, remembered across restarts and projects (Settings > Tools > CLI Agent Dock).
@@ -15,3 +19,6 @@
 - Cross-platform executable resolution via PATH plus well-known install locations (npm global, Homebrew, `~/.local/bin`, and on Windows the WinGet `Links` and `Packages\<id>\` dirs), launched by absolute path so a stale IDE PATH does not break launching; friendly "agent not found" state otherwise (Windows, macOS, Linux).
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
+
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/vladimirvaca/cli-agent-dock/commits/v0.1.0
