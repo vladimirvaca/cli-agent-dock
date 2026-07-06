@@ -1,8 +1,8 @@
 # CLI Agent Dock for JetBrains
 
 ![Build](https://github.com/vladimirvaca/cli-agent-dock/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/com.github.vladimirvaca.cliagentdock.svg)](https://plugins.jetbrains.com/plugin/com.github.vladimirvaca.cliagentdock)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/com.github.vladimirvaca.cliagentdock.svg)](https://plugins.jetbrains.com/plugin/com.github.vladimirvaca.cliagentdock)
+[![Version](https://img.shields.io/jetbrains/plugin/v/32765.svg)](https://plugins.jetbrains.com/plugin/32765)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/32765.svg)](https://plugins.jetbrains.com/plugin/32765)
 
 <!-- The Marketplace plugin description is maintained directly in src/main/resources/META-INF/plugin.xml -->
 **CLI Agent Dock** brings your favorite coding agent right into your JetBrains IDE. It
@@ -73,9 +73,9 @@ opening a broken terminal.
 
 - Using JetBrains Marketplace:
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/com.github.vladimirvaca.cliagentdock) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32765) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/com.github.vladimirvaca.cliagentdock/versions) from JetBrains Marketplace and install it manually using
+  You can also download the [latest release](https://plugins.jetbrains.com/plugin/32765/versions) from JetBrains Marketplace and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 - Manually:
