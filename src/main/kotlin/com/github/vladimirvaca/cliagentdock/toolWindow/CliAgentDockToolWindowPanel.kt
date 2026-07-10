@@ -4,6 +4,8 @@ import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
 import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.github.vladimirvaca.cliagentdock.agent.AgentExecutableResolver
 import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
+import com.github.vladimirvaca.cliagentdock.changes.ChangedFilesPanel
+import com.github.vladimirvaca.cliagentdock.changes.SessionFileChangeTracker
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
@@ -18,6 +20,7 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.InplaceButton
+import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
@@ -43,6 +46,11 @@ class CliAgentDockToolWindowPanel(
     private val project: Project,
     private val parentDisposable: Disposable,
 ) : SimpleToolWindowPanel(true, true) {
+
+    private companion object {
+        /** Share of the tab's height kept by the terminal when the changed-files panel shows. */
+        private const val TERMINAL_PROPORTION = 0.80f
+    }
 
     private val settings = AgentSettingsState.getInstance()
     private val tabs = JBTabbedPane()
@@ -205,7 +213,40 @@ class CliAgentDockToolWindowPanel(
                 if (liveView === view) close()
             }
             liveView = view
-            return view
+
+            // Terminal on top; a "Files changed" panel appears below only once this
+            // session's agent modifies something, and vanishes again when cleared.
+            // Expanded it lives in the splitter (resizable); minimized it re-docks as a
+            // header-high strip pinned under the terminal.
+            val splitter = OnePixelSplitter(true, TERMINAL_PROPORTION)
+            splitter.firstComponent = view
+            val container = BorderLayoutPanel().addToCenter(splitter)
+
+            lateinit var tracker: SessionFileChangeTracker
+            val changedFiles = ChangedFilesPanel(project, workingDir) { tracker.clear() }
+            var hasChanges = false
+
+            fun placeChangedFiles() {
+                val expanded = hasChanges && !changedFiles.isMinimized
+                // Swing re-parents on add, so ordering matters: detach from the slot being
+                // vacated before (re)attaching to the active one.
+                splitter.secondComponent = if (expanded) changedFiles else null
+                if (hasChanges && changedFiles.isMinimized) {
+                    container.addToBottom(changedFiles)
+                } else if (!expanded) {
+                    container.remove(changedFiles)
+                }
+                container.revalidate()
+                container.repaint()
+            }
+
+            changedFiles.onMinimizedChanged = { placeChangedFiles() }
+            tracker = SessionFileChangeTracker(workingDir, sessionDisposable) { changes ->
+                hasChanges = changes.isNotEmpty()
+                changedFiles.update(changes)
+                placeChangedFiles()
+            }
+            return container
         }
 
         private fun disposeSession() {
