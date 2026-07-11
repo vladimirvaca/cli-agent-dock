@@ -79,8 +79,11 @@ agent/
                                  readyMarkers, readyTimeoutMs. Builds the launch command
                                  line (absolute path, quoted if needed).
   AgentRegistry.kt               Known agents; Claude Code is the enabled default, others
-                                 stubbed disabled. isAvailable() delegates to the resolver.
+                                 stubbed disabled.
   AgentExecutableResolver.kt     Resolves the executable via PATH + well-known install dirs.
+
+ui/
+  AgentComboBox.kt               Shared agent-picker ComboBox factory (toolbar + settings).
 
 terminal/
   AgentTerminalRunner.kt         Creates the embedded terminal and sends the agent command.
@@ -88,8 +91,10 @@ terminal/
                                  then the terminal card.
 
 settings/
-  AgentSettingsState.kt          PersistentStateComponent (APP level) storing preferred agent id.
-  AgentSettingsConfigurable.kt   Settings UI under Settings > Tools > CLI Agent Dock.
+  AgentSettingsState.kt          PersistentStateComponent (APP level, @Service light service —
+                                 not registered in plugin.xml) storing preferred agent id.
+  AgentSettingsConfigurable.kt   Settings UI under Settings > Tools > CLI Agent Dock
+                                 (BoundConfigurable + Kotlin UI DSL).
 
 util/
   IdeInfo.kt                     Reports the running IDE product/version/build.

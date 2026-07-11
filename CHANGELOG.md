@@ -8,6 +8,10 @@
 
 - **Files changed panel per session** — while an agent runs, files it creates, modifies, or deletes in the project are listed in a panel below that session's terminal. Rows use VCS-style colors and act as hyperlinks: hover highlights, a single click opens the IDE's diff view for that file (falling back to opening the file itself when there's no VCS change to diff), and a small open-file icon before the filename opens it directly instead. The header jumps to the IDE's commit view and minimizes the panel to a thin strip under the terminal; a red clear button in the bottom-right corner empties the list. The panel appears only once the session changes a file.
 
+### Fixed
+
+- The clear button in the files-changed panel now renders crisply on HiDPI screens (its red tint is applied through the platform's icon API instead of a hand-scaled bitmap).
+
 ### Removed
 
 - **IDE version label** from the toolbar — it didn't carry its weight next to the agent controls; `IdeInfo.describe()` is still logged on startup for diagnostics.

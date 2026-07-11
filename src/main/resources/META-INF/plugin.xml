@@ -35,8 +35,7 @@
             icon="/icons/cliAgentDock.svg"
             factoryClass="com.github.vladimirvaca.cliagentdock.toolWindow.CliAgentDockToolWindowFactory"/>
 
-        <applicationService
-            serviceImplementation="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState"/>
+        <!-- AgentSettingsState is a light service (@Service) and must not also be registered here. -->
 
         <applicationConfigurable
             parentId="tools"

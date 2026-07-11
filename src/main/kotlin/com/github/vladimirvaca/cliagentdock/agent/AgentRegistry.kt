@@ -41,11 +41,4 @@ object AgentRegistry {
     fun findById(id: String?): Agent? = agents.firstOrNull { it.id == id }
 
     fun default(): Agent = findById(DEFAULT_AGENT_ID) ?: agents.first()
-
-    /**
-     * Returns true if the agent's executable can be found via PATH or a well-known
-     * install location. See [AgentExecutableResolver].
-     */
-    fun isAvailable(agent: Agent): Boolean =
-        AgentExecutableResolver.resolve(agent) != null
 }

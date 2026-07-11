@@ -3,25 +3,23 @@ package com.github.vladimirvaca.cliagentdock.toolWindow
 import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
 import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.github.vladimirvaca.cliagentdock.agent.AgentExecutableResolver
-import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
 import com.github.vladimirvaca.cliagentdock.changes.ChangedFilesPanel
 import com.github.vladimirvaca.cliagentdock.changes.SessionFileChangeTracker
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
+import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
 import com.github.vladimirvaca.cliagentdock.util.IdeInfo
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.InplaceButton
 import com.intellij.ui.OnePixelSplitter
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTabbedPane
@@ -49,15 +47,17 @@ class CliAgentDockToolWindowPanel(
     private companion object {
         /** Share of the tab's height kept by the terminal when the changed-files panel shows. */
         private const val TERMINAL_PROPORTION = 0.80f
+
+        /** Client property on a tab's content component pointing back to its [AgentSession]. */
+        private const val SESSION_KEY = "CliAgentDock.session"
     }
 
     private val settings = AgentSettingsState.getInstance()
     private val tabs = JBTabbedPane()
-    private val agentCombo = ComboBox(AgentRegistry.enabledAgents.toTypedArray())
+    private val agentCombo = agentComboBox()
     private val sessions = mutableListOf<AgentSession>()
 
     init {
-        agentCombo.renderer = SimpleListCellRenderer.create("") { it.displayName }
         agentCombo.selectedItem = settings.preferredAgent
         // Selecting an agent only records the preference used for the next new session;
         // existing tabs keep running so the dropdown never disrupts live sessions.
@@ -78,17 +78,13 @@ class CliAgentDockToolWindowPanel(
             })
         }
 
-        val toolbar = BorderLayoutPanel().apply {
+        thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")
+
+        toolbar = BorderLayoutPanel().apply {
             border = JBUI.Borders.empty(4, 6)
             addToLeft(controls)
         }
-
-        thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")
-
-        val root = BorderLayoutPanel()
-        root.addToTop(toolbar)
-        root.addToCenter(tabs)
-        setContent(root)
+        setContent(tabs)
 
         // Start with a single session for the preferred agent.
         openSession(settings.preferredAgent)
@@ -97,11 +93,8 @@ class CliAgentDockToolWindowPanel(
     private fun selectedAgent(): Agent = agentCombo.selectedItem as? Agent ?: settings.preferredAgent
 
     /** The session whose tab is currently selected, or null when no tabs are open. */
-    private fun currentSession(): AgentSession? {
-        val index = tabs.selectedIndex
-        if (index < 0) return null
-        return sessions.firstOrNull { tabs.indexOfTabComponent(it.header) == index }
-    }
+    private fun currentSession(): AgentSession? =
+        (tabs.selectedComponent as? JComponent)?.getClientProperty(SESSION_KEY) as? AgentSession
 
     private fun openSession(agent: Agent) {
         val session = AgentSession(agent, uniqueTitle(agent.displayName))
@@ -149,7 +142,9 @@ class CliAgentDockToolWindowPanel(
     /**
      * A single agent tab. The [header] (title + close button) is stable across restarts,
      * so tab lookups use [JBTabbedPane.indexOfTabComponent] rather than caching an index
-     * that would drift as other tabs are opened or closed.
+     * that would drift as other tabs are opened or closed. Each content component carries
+     * its session as a [SESSION_KEY] client property, so selected-tab → session resolution
+     * is a direct lookup instead of a scan.
      */
     private inner class AgentSession(private val agent: Agent, val title: String) {
 
@@ -192,7 +187,10 @@ class CliAgentDockToolWindowPanel(
             sessions.remove(this)
         }
 
-        private fun createContent(): JComponent {
+        private fun createContent(): JComponent =
+            buildContent().apply { putClientProperty(SESSION_KEY, this@AgentSession) }
+
+        private fun buildContent(): JComponent {
             val executable = AgentExecutableResolver.resolve(agent)
             if (executable == null) {
                 return createNotFoundPanel(agent, onRetry = ::restart)

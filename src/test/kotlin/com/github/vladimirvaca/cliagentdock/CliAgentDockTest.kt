@@ -18,7 +18,7 @@ class CliAgentDockTest : BasePlatformTestCase() {
 
     fun testCommandLineJoinsCommandAndArgs() {
         val default = AgentRegistry.default()
-        assertEquals("claude", default.commandLine)
+        assertEquals("claude", default.commandLineFor(null))
     }
 
     fun testSettingsDefaultToClaudeCode() {

@@ -17,6 +17,7 @@ import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.SwingConstants
@@ -52,7 +53,8 @@ class AgentTerminalView(
     private val loader = createLoaderPanel()
 
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
-    private val deadline = System.currentTimeMillis() + agent.readyTimeoutMs
+    // Monotonic clock so the ready timeout is immune to wall-clock adjustments.
+    private val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(agent.readyTimeoutMs)
 
     /** Guards [onExit] so the termination callback and the exit poll can't both fire it. */
     private var exitNotified = false
@@ -113,7 +115,7 @@ class AgentTerminalView(
     private fun checkReady() {
         val output = widget.getText()
         val ready = agent.readyMarkers.any { output.contains(it) }
-        if (ready || System.currentTimeMillis() >= deadline) {
+        if (ready || System.nanoTime() - deadlineNanos >= 0) {
             showTerminal()
         } else {
             scheduleReadyCheck()

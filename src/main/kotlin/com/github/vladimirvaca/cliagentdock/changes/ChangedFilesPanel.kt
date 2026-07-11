@@ -20,26 +20,23 @@ import com.intellij.ui.CollectionListModel
 import com.intellij.ui.IdeBorderFactory
 import com.intellij.ui.InplaceButton
 import com.intellij.ui.SideBorder
+import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.panels.HorizontalLayout
+import com.intellij.ui.icons.toStrokeIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
-import java.awt.Image
-import java.awt.RenderingHints
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import java.awt.image.BufferedImage
 import javax.swing.BorderFactory
-import javax.swing.Icon
-import javax.swing.ImageIcon
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 import javax.swing.SwingUtilities
@@ -77,8 +74,14 @@ class ChangedFilesPanel(
             return CliAgentDockBundle["changedFiles.openFile.tooltip"]
         }
     }
-    private val countLabel = JBLabel()
-    private var rawCountText = ""
+    // A SimpleColoredComponent rather than a JBLabel so the hover underline is a text
+    // attribute, not HTML markup swapped in and out of the label.
+    private val countLabel = SimpleColoredComponent().apply {
+        ipad = JBUI.emptyInsets()
+        border = JBUI.Borders.empty()
+    }
+    private var changeCount = 0
+    private var countHovered = false
     private val scroll = JBScrollPane(list).apply { border = JBUI.Borders.empty() }
     private val minimizeButton = InplaceButton(
         IconButton(CliAgentDockBundle["changedFiles.minimize.tooltip"], AllIcons.General.ChevronDown),
@@ -171,12 +174,8 @@ class ChangedFilesPanel(
             override fun mouseClicked(e: MouseEvent) {
                 if (e.button == MouseEvent.BUTTON1) openCommitView()
             }
-            override fun mouseEntered(e: MouseEvent) {
-                countLabel.text = "<html><u>$rawCountText</u></html>"
-            }
-            override fun mouseExited(e: MouseEvent) {
-                countLabel.text = rawCountText
-            }
+            override fun mouseEntered(e: MouseEvent) = setCountHovered(true)
+            override fun mouseExited(e: MouseEvent) = setCountHovered(false)
         })
 
         val commitButton = InplaceButton(
@@ -184,7 +183,10 @@ class ChangedFilesPanel(
         ) { openCommitView() }
 
         val clearButton = InplaceButton(
-            IconButton(CliAgentDockBundle["changedFiles.clear.tooltip"], tintedIcon(AllIcons.Actions.GC, CLEAR_ICON_COLOR)),
+            IconButton(
+                CliAgentDockBundle["changedFiles.clear.tooltip"],
+                toStrokeIcon(AllIcons.Actions.GC, CLEAR_ICON_COLOR),
+            ),
         ) { onClear() }
 
         val left = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(6))).apply {
@@ -234,8 +236,21 @@ class ChangedFilesPanel(
     fun update(changes: List<ChangedFile>) {
         hoveredIndex = -1
         model.replaceAll(changes)
-        rawCountText = CliAgentDockBundle["changedFiles.header", changes.size]
-        countLabel.text = rawCountText
+        changeCount = changes.size
+        renderCountLabel()
+    }
+
+    private fun setCountHovered(hovered: Boolean) {
+        if (countHovered == hovered) return
+        countHovered = hovered
+        renderCountLabel()
+    }
+
+    /** Re-renders the count text, underlined while hovered so it reads as a link. */
+    private fun renderCountLabel() {
+        countLabel.clear()
+        val style = if (countHovered) SimpleTextAttributes.STYLE_UNDERLINE else SimpleTextAttributes.STYLE_PLAIN
+        countLabel.append(CliAgentDockBundle["changedFiles.header", changeCount], SimpleTextAttributes(style, null))
     }
 
     /** The row whose cell actually contains the event point, or null (list may have dead space). */
@@ -330,25 +345,3 @@ class ChangedFilesPanel(
 
 /** Flat red used for the destructive clear action; deliberately theme-invariant, not JBColor. */
 private val CLEAR_ICON_COLOR = Color(0xE0, 0x50, 0x50)
-
-/** Recolors [source] to a flat [color] silhouette, keeping its original alpha/anti-aliasing. */
-private fun tintedIcon(source: Icon, color: Color): Icon {
-    val scale = 4
-    val width = source.iconWidth
-    val height = source.iconHeight
-    val buffer = BufferedImage(width * scale, height * scale, BufferedImage.TYPE_INT_ARGB)
-    val g2 = buffer.createGraphics()
-    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    g2.scale(scale.toDouble(), scale.toDouble())
-    source.paintIcon(null, g2, 0, 0)
-    g2.dispose()
-
-    val rgb = color.rgb and 0x00FFFFFF
-    for (py in 0 until buffer.height) {
-        for (px in 0 until buffer.width) {
-            val alpha = buffer.getRGB(px, py) ushr 24
-            if (alpha != 0) buffer.setRGB(px, py, (alpha shl 24) or rgb)
-        }
-    }
-    return ImageIcon(buffer.getScaledInstance(width, height, Image.SCALE_SMOOTH))
-}

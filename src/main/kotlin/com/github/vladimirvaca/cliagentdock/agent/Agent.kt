@@ -1,5 +1,7 @@
 package com.github.vladimirvaca.cliagentdock.agent
 
+import java.io.File
+
 /**
  * Describes a coding agent that can be launched inside the embedded terminal.
  *
@@ -38,16 +40,12 @@ data class Agent(
     /** Maximum time to keep the loader before revealing the terminal anyway. */
     val readyTimeoutMs: Long = 15_000,
 ) {
-    /** The bare command line (executable name via PATH + args). */
-    val commandLine: String
-        get() = commandLineFor(null)
-
     /**
      * Builds the command line sent to the shell. When [executable] is provided its
      * absolute path is used (quoted if needed), so the agent launches even when the
      * shell's PATH does not include it; otherwise the bare [command] name is used.
      */
-    fun commandLineFor(executable: java.io.File?): String {
+    fun commandLineFor(executable: File?): String {
         val exe = executable?.absolutePath ?: command
         val quoted = if (exe.any { it.isWhitespace() }) "\"$exe\"" else exe
         return (listOf(quoted) + args).joinToString(" ").trim()
