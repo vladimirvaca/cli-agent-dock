@@ -17,6 +17,8 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent
 import com.intellij.util.Alarm
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /** How a file changed during the session, from the project's point of view. */
 enum class ChangeKind { CREATED, MODIFIED, DELETED }
@@ -72,7 +74,7 @@ class SessionFileChangeTracker(
      */
     private fun scheduleRefreshNudge() {
         refreshAlarm.addRequest({
-            SaveAndSyncHandler.getInstance().scheduleRefresh()
+            nudgeIfDue()
             scheduleRefreshNudge()
         }, REFRESH_NUDGE_MS)
     }
@@ -149,6 +151,30 @@ class SessionFileChangeTracker(
     companion object {
         /** How often to nudge a VFS refresh while the session runs. */
         private const val REFRESH_NUDGE_MS = 2_000
+
+        /**
+         * Alarm-timer jitter would otherwise let a lone tracker's own next tick arrive a
+         * hair "early" and be skipped, halving its effective cadence.
+         */
+        private const val NUDGE_JITTER_TOLERANCE_MS = 250
+
+        /** When the last nudge fired, across all live trackers. */
+        private val lastNudgeNanos = AtomicLong(Long.MIN_VALUE)
+
+        /**
+         * Every tracker ticks its own alarm, but one refresh per interval serves them
+         * all: the refresh rescans everything dirty, regardless of who asked. This gate
+         * keeps N open sessions from queueing N refreshes per interval.
+         */
+        private fun nudgeIfDue() {
+            val now = System.nanoTime()
+            val last = lastNudgeNanos.get()
+            val due = last == Long.MIN_VALUE ||
+                now - last >= TimeUnit.MILLISECONDS.toNanos((REFRESH_NUDGE_MS - NUDGE_JITTER_TOLERANCE_MS).toLong())
+            if (due && lastNudgeNanos.compareAndSet(last, now)) {
+                SaveAndSyncHandler.getInstance().scheduleRefresh()
+            }
+        }
 
         /**
          * Folds a new event into what the session already recorded for the same file.

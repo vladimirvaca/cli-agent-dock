@@ -3,6 +3,7 @@ package com.github.vladimirvaca.cliagentdock.agent
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.openapi.util.SystemInfo
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Resolves an agent's executable to an absolute file.
@@ -17,7 +18,24 @@ import java.io.File
  */
 object AgentExecutableResolver {
 
+    /**
+     * Successful resolutions by agent id. Resolution scans PATH and stats dozens of
+     * candidate files (and lists the WinGet Packages dir on Windows) on the EDT, so a
+     * hit must cost one stat, not a rescan. Only successes are cached: a miss stays
+     * uncached so "Retry" after installing the CLI performs a real lookup, and a cached
+     * file that has since been removed falls through to a fresh scan.
+     */
+    private val resolved = ConcurrentHashMap<String, File>()
+
     fun resolve(agent: Agent): File? {
+        resolved[agent.id]?.let { cached ->
+            if (cached.isFile) return cached
+            resolved.remove(agent.id)
+        }
+        return doResolve(agent)?.also { resolved[agent.id] = it }
+    }
+
+    private fun doResolve(agent: Agent): File? {
         // 1. Standard PATH lookup (honors PATHEXT / .exe/.cmd/.bat on Windows).
         PathEnvironmentVariableUtil.findInPath(agent.command)?.let { return it }
 

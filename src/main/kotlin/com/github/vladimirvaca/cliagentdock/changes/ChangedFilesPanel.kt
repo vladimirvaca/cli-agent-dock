@@ -270,8 +270,17 @@ class ChangedFilesPanel(
 
     private fun setHovered(index: Int) {
         if (hoveredIndex == index) return
+        val previous = hoveredIndex
         hoveredIndex = index
-        list.repaint()
+        // Hover only restyles the row left and the row entered; repainting just those
+        // two cells keeps mouse movement from redrawing the whole list.
+        repaintRow(previous)
+        repaintRow(index)
+    }
+
+    private fun repaintRow(index: Int) {
+        if (index < 0 || index >= model.size) return
+        list.getCellBounds(index, index)?.let { list.repaint(it) }
     }
 
     /** A deleted row is only actionable once Git recognizes it as a change to diff against. */
