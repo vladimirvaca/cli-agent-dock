@@ -1,0 +1,12 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cadpd" x1="3" y1="4" x2="37" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B57BF9"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="3" width="36" height="34" rx="9" fill="url(#cadpd)"/>
+  <path d="M10 14L16.5 19.7L10 25.4" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19.4 26H25" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M29.8 6.5Q30.4 10.8 34.7 11.4Q30.4 12 29.8 16.3Q29.2 12 24.9 11.4Q29.2 10.8 29.8 6.5Z" fill="#FFFFFF"/>
+</svg>

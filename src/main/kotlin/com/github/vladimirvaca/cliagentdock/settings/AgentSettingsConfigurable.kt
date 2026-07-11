@@ -22,7 +22,7 @@ class AgentSettingsConfigurable : BoundConfigurable(CliAgentDockBundle["settings
                 cell(agentComboBox()).bindItem(
                     { settings.preferredAgent },
                     { agent -> agent?.let { settings.preferredAgentId = it.id } },
-                )
+                ).comment(CliAgentDockBundle["settings.preferredAgent.comment"])
             }
         }
     }

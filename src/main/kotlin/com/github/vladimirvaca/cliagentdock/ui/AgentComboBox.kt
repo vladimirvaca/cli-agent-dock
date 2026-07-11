@@ -8,9 +8,13 @@ import com.intellij.ui.SimpleListCellRenderer
 
 /**
  * The agent picker shared by the tool-window toolbar and the settings page:
- * the enabled agents from [AgentRegistry], rendered by display name.
+ * the enabled agents from [AgentRegistry], rendered as icon + display name.
  */
 fun agentComboBox(): ComboBox<Agent> =
     ComboBox(CollectionComboBoxModel(AgentRegistry.enabledAgents)).apply {
-        renderer = SimpleListCellRenderer.create("") { it.displayName }
+        renderer = SimpleListCellRenderer.create { label, value, _ ->
+            value ?: return@create
+            label.text = value.displayName
+            label.icon = AgentIcons.forAgent(value)
+        }
     }

@@ -19,6 +19,7 @@ import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.IdeBorderFactory
 import com.intellij.ui.InplaceButton
+import com.intellij.ui.JBColor
 import com.intellij.ui.SideBorder
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
@@ -28,11 +29,11 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.icons.toStrokeIcon
+import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.BorderLayout
-import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -48,13 +49,14 @@ import javax.swing.SwingUtilities
  * hovering highlights and underlines a row (hand cursor), a single click opens the VCS
  * diff view for that file so the change is visible without leaving the tool window. A
  * small open-file icon before the file-type icon offers a second, more direct action —
- * clicking it opens the file itself instead of its diff. Deleted rows have nothing to
- * open, so that icon is hidden for them, and the row itself is only clickable (to show
+ * clicking it opens the file itself instead of its diff. It appears only on the hovered
+ * row (an empty placeholder keeps the geometry stable elsewhere). Deleted rows have
+ * nothing to open, so they never show it, and the row itself is only clickable (to show
  * the diff) when Git still knows about the deletion; for files Git doesn't track at all,
  * a row click falls back to opening the file. The header offers a shortcut to the IDE's
- * commit view; a red clear button sits in the footer's bottom-right corner, apart from
- * the other actions since it's destructive. The owner shows/hides the whole panel, so it
- * renders assuming content.
+ * commit view on the left and, on the right, a red clear button — set apart from the
+ * minimize chevron by a wider gap since it's destructive. The owner shows/hides the
+ * whole panel, so it renders assuming content.
  */
 class ChangedFilesPanel(
     private val project: Project,
@@ -121,10 +123,11 @@ class ChangedFilesPanel(
         }
     }
 
-    // Hidden for deleted rows (there's nothing to open); [onOpenIcon] hit-tests clicks
-    // against this component's laid-out bounds, since JList renderers aren't real
-    // interactive children and never receive events of their own.
-    private val openIcon = JBLabel(AllIcons.Actions.EditSource).apply {
+    // Shows [AllIcons.Actions.EditSource] only on the hovered row; elsewhere an empty
+    // icon of the same size keeps rows from shifting as the mouse moves. [onOpenIcon]
+    // hit-tests clicks against this component's laid-out bounds, since JList renderers
+    // aren't real interactive children and never receive events of their own.
+    private val openIcon = JBLabel(EmptyIcon.ICON_16).apply {
         border = JBUI.Borders.emptyRight(4)
     }
 
@@ -139,7 +142,11 @@ class ChangedFilesPanel(
             textRenderer.getListCellRendererComponent(l, value, index, selected, hasFocus)
             rowRenderer.background = textRenderer.background
             openIcon.background = textRenderer.background
-            openIcon.isVisible = value.kind != ChangeKind.DELETED
+            openIcon.icon = if (value.kind != ChangeKind.DELETED && index == hoveredIndex) {
+                AllIcons.Actions.EditSource
+            } else {
+                EmptyIcon.ICON_16
+            }
             rowRenderer
         }
 
@@ -195,24 +202,23 @@ class ChangedFilesPanel(
             add(commitButton)
         }
 
-        val header = BorderLayoutPanel().apply {
+        // Clear is destructive, so a wider gap keeps it from being brushed against when
+        // aiming for the minimize chevron.
+        val right = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(12))).apply {
             isOpaque = false
-            border = JBUI.Borders.empty(4, 8, 2, 8)
-            addToLeft(left)
-            addToRight(minimizeButton)
+            add(clearButton)
+            add(minimizeButton)
         }
 
-        // Clear is destructive, so it sits apart from the header actions, anchored to the
-        // panel's bottom-right corner where it can't be brushed against by accident.
-        val footer = BorderLayoutPanel().apply {
+        val header = BorderLayoutPanel().apply {
             isOpaque = false
-            border = JBUI.Borders.empty(2, 8, 6, 8)
-            addToRight(clearButton)
+            border = JBUI.Borders.empty(4, 8)
+            addToLeft(left)
+            addToRight(right)
         }
 
         addToTop(header)
         addToCenter(scroll)
-        addToBottom(footer)
 
         // A hairline with a little breathing room above it, rather than a line jammed
         // straight against the terminal content, reads as an intentional section break.
@@ -250,7 +256,9 @@ class ChangedFilesPanel(
     private fun renderCountLabel() {
         countLabel.clear()
         val style = if (countHovered) SimpleTextAttributes.STYLE_UNDERLINE else SimpleTextAttributes.STYLE_PLAIN
-        countLabel.append(CliAgentDockBundle["changedFiles.header", changeCount], SimpleTextAttributes(style, null))
+        countLabel.append(CliAgentDockBundle["changedFiles.header"], SimpleTextAttributes(style, null))
+        // The counter is secondary information, so it renders grayed like IDE counters do.
+        countLabel.append(" " + CliAgentDockBundle["changedFiles.count", changeCount], SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 
     /** The row whose cell actually contains the event point, or null (list may have dead space). */
@@ -282,7 +290,7 @@ class ChangedFilesPanel(
         if (value.kind == ChangeKind.DELETED) return false
         val cellBounds = list.getCellBounds(row, row) ?: return false
         textRenderer.getListCellRendererComponent(list, value, row, false, false)
-        openIcon.isVisible = true
+        openIcon.icon = AllIcons.Actions.EditSource
         rowRenderer.setBounds(0, 0, cellBounds.width, cellBounds.height)
         rowRenderer.doLayout()
         val hit = SwingUtilities.getDeepestComponentAt(rowRenderer, e.x - cellBounds.x, e.y - cellBounds.y)
@@ -343,5 +351,5 @@ class ChangedFilesPanel(
     }
 }
 
-/** Flat red used for the destructive clear action; deliberately theme-invariant, not JBColor. */
-private val CLEAR_ICON_COLOR = Color(0xE0, 0x50, 0x50)
+/** Destructive-action red, tuned per theme: deeper on light backgrounds, softer on dark. */
+private val CLEAR_ICON_COLOR = JBColor(0xCC3645, 0xE05050)

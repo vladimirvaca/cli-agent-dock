@@ -8,28 +8,34 @@ import com.github.vladimirvaca.cliagentdock.changes.SessionFileChangeTracker
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
+import com.github.vladimirvaca.cliagentdock.ui.AgentIcons
 import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
 import com.github.vladimirvaca.cliagentdock.util.IdeInfo
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.InplaceButton
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
+import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import javax.swing.Box
-import javax.swing.JButton
+import java.awt.CardLayout
 import javax.swing.JComponent
 import javax.swing.SwingConstants
 
@@ -50,12 +56,24 @@ class CliAgentDockToolWindowPanel(
 
         /** Client property on a tab's content component pointing back to its [AgentSession]. */
         private const val SESSION_KEY = "CliAgentDock.session"
+
+        private const val CARD_SESSIONS = "sessions"
+        private const val CARD_EMPTY = "empty"
     }
 
     private val settings = AgentSettingsState.getInstance()
     private val tabs = JBTabbedPane()
     private val agentCombo = agentComboBox()
     private val sessions = mutableListOf<AgentSession>()
+
+    /** Shown instead of [tabs] once the last session is closed. */
+    private val emptyState = JBPanelWithEmptyText().apply {
+        emptyText.appendLine(CliAgentDockBundle["emptyState.title"])
+        emptyText.appendLine(CliAgentDockBundle["emptyState.start"], SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+            openSession(selectedAgent())
+        }
+    }
+    private val contentCards = JBPanel<JBPanel<*>>(CardLayout())
 
     init {
         agentCombo.selectedItem = settings.preferredAgent
@@ -65,17 +83,16 @@ class CliAgentDockToolWindowPanel(
             (agentCombo.selectedItem as? Agent)?.let { settings.preferredAgentId = it.id }
         }
 
+        // Icon actions (native tool-window style) instead of text buttons; the labels
+        // move into the tooltips supplied by the actions' text/description.
+        val actionToolbar = ActionManager.getInstance()
+            .createActionToolbar("CliAgentDockToolbar", DefaultActionGroup(NewSessionAction(), RestartAction()), true)
+        actionToolbar.targetComponent = this
+
         val controls = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(6))).apply {
             add(JBLabel(CliAgentDockBundle["label.agent"]))
             add(agentCombo)
-            add(JButton(CliAgentDockBundle["action.newSession.text"]).apply {
-                toolTipText = CliAgentDockBundle["action.newSession.description"]
-                addActionListener { openSession(selectedAgent()) }
-            })
-            add(JButton(CliAgentDockBundle["action.restart.text"]).apply {
-                toolTipText = CliAgentDockBundle["action.restart.description"]
-                addActionListener { currentSession()?.restart() }
-            })
+            add(actionToolbar.component.apply { isOpaque = false })
         }
 
         thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")
@@ -84,10 +101,42 @@ class CliAgentDockToolWindowPanel(
             border = JBUI.Borders.empty(4, 6)
             addToLeft(controls)
         }
-        setContent(tabs)
+        contentCards.add(tabs, CARD_SESSIONS)
+        contentCards.add(emptyState, CARD_EMPTY)
+        setContent(contentCards)
 
         // Start with a single session for the preferred agent.
         openSession(settings.preferredAgent)
+    }
+
+    /** Flips between the tabbed sessions and the empty state as tabs come and go. */
+    private fun updateContentCard() {
+        val card = if (tabs.tabCount == 0) CARD_EMPTY else CARD_SESSIONS
+        (contentCards.layout as CardLayout).show(contentCards, card)
+    }
+
+    private inner class NewSessionAction : AnAction(
+        CliAgentDockBundle["action.newSession.text"],
+        CliAgentDockBundle["action.newSession.description"],
+        AllIcons.General.Add,
+    ), DumbAware {
+        override fun actionPerformed(e: AnActionEvent) = openSession(selectedAgent())
+    }
+
+    private inner class RestartAction : AnAction(
+        CliAgentDockBundle["action.restart.text"],
+        CliAgentDockBundle["action.restart.description"],
+        AllIcons.Actions.Restart,
+    ), DumbAware {
+        override fun actionPerformed(e: AnActionEvent) {
+            currentSession()?.restart()
+        }
+
+        override fun update(e: AnActionEvent) {
+            e.presentation.isEnabled = currentSession() != null
+        }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
     }
 
     private fun selectedAgent(): Agent = agentCombo.selectedItem as? Agent ?: settings.preferredAgent
@@ -111,33 +160,26 @@ class CliAgentDockToolWindowPanel(
         return "$base ($n)"
     }
 
-    private fun createNotFoundPanel(agent: Agent, onRetry: () -> Unit): JComponent {
-        val message = JBLabel(CliAgentDockBundle["notFound.message", agent.displayName, agent.command]).apply {
-            horizontalAlignment = SwingConstants.CENTER
+    /** The IDE's standard empty-state text with link-style actions, not raw buttons. */
+    private fun createNotFoundPanel(agent: Agent, onRetry: () -> Unit): JComponent =
+        JBPanelWithEmptyText().apply {
+            emptyText.appendLine(CliAgentDockBundle["notFound.title", agent.displayName])
+            emptyText.appendLine(
+                CliAgentDockBundle["notFound.hint", agent.command],
+                SimpleTextAttributes.GRAYED_ATTRIBUTES,
+                null,
+            )
+            emptyText.appendLine(CliAgentDockBundle["notFound.retry"], SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                onRetry()
+            }
+            emptyText.appendLine(
+                CliAgentDockBundle["notFound.openSettings"],
+                SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+            ) {
+                ShowSettingsUtil.getInstance()
+                    .showSettingsDialog(project, AgentSettingsConfigurable::class.java)
+            }
         }
-        val buttons = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(8))).apply {
-            add(JButton(CliAgentDockBundle["notFound.retry"]).apply {
-                addActionListener { onRetry() }
-            })
-            add(JButton(CliAgentDockBundle["notFound.openSettings"]).apply {
-                addActionListener {
-                    ShowSettingsUtil.getInstance()
-                        .showSettingsDialog(project, AgentSettingsConfigurable::class.java)
-                }
-            })
-        }
-
-        val content = Box.createVerticalBox().apply {
-            add(message)
-            add(Box.createVerticalStrut(JBUI.scale(12)))
-            add(buttons)
-        }
-
-        // Center the content in the available space.
-        return JBPanel<JBPanel<*>>(GridBagLayout()).apply {
-            add(content, GridBagConstraints())
-        }
-    }
 
     /**
      * A single agent tab. The [header] (title + close button) is stable across restarts,
@@ -166,6 +208,7 @@ class CliAgentDockToolWindowPanel(
             val index = tabs.indexOfComponent(content)
             tabs.setTabComponentAt(index, header)
             tabs.selectedIndex = index
+            updateContentCard()
         }
 
         fun restart() {
@@ -185,6 +228,7 @@ class CliAgentDockToolWindowPanel(
             disposeSession()
             if (index >= 0) tabs.removeTabAt(index)
             sessions.remove(this)
+            updateContentCard()
         }
 
         private fun createContent(): JComponent =
@@ -256,7 +300,7 @@ class CliAgentDockToolWindowPanel(
 
             return JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(4))).apply {
                 isOpaque = false
-                add(JBLabel(title))
+                add(JBLabel(title, AgentIcons.forAgent(agent), SwingConstants.LEADING))
                 add(closeButton)
             }
         }

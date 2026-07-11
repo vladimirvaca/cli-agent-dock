@@ -13,6 +13,7 @@ import com.intellij.util.Alarm
 import com.intellij.util.ui.AnimatedIcon
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -139,6 +140,8 @@ class AgentTerminalView(
             add(JBLabel(CliAgentDockBundle["loader.starting", agent.displayName]).apply {
                 alignmentX = CENTER_ALIGNMENT
                 horizontalAlignment = SwingConstants.CENTER
+                // Secondary text, matching how the IDE styles progress captions.
+                foreground = UIUtil.getContextHelpForeground()
             })
         }
 
