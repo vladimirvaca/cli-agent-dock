@@ -30,6 +30,10 @@ dependencies {
         // Bundled Terminal plugin - provides the embedded terminal used to host the agent CLI.
         bundledPlugin("org.jetbrains.plugins.terminal")
 
+        // Core VCS content module - provides ShowDiffAction, used to open the diff view
+        // for a file straight from the "Files changed" panel.
+        bundledModule("intellij.platform.vcs.impl")
+
         testFramework(TestFrameworkType.Platform)
     }
 }

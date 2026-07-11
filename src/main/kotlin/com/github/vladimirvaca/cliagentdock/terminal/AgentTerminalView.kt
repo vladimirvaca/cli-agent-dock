@@ -13,16 +13,12 @@ import com.intellij.util.Alarm
 import com.intellij.util.ui.AnimatedIcon
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
-import com.intellij.util.ui.components.BorderLayoutPanel
-import java.awt.Adjustable
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.io.File
 import javax.swing.Box
 import javax.swing.JComponent
-import javax.swing.JScrollBar
 import javax.swing.SwingConstants
 
 /**
@@ -55,10 +51,6 @@ class AgentTerminalView(
     private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("CliAgentDockStartup")
     private val loader = createLoaderPanel()
 
-    /** Hosts the terminal plus, once attached, the visible scrollbar on its right. */
-    private val terminalHolder = BorderLayoutPanel().addToCenter(widget.component)
-    private var scrollBarAttached = false
-
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
     private val deadline = System.currentTimeMillis() + agent.readyTimeoutMs
 
@@ -70,8 +62,7 @@ class AgentTerminalView(
     init {
         Disposer.register(parentDisposable, spinner)
 
-        attachScrollBar()
-        add(terminalHolder, CARD_TERMINAL)
+        add(widget.component, CARD_TERMINAL)
         add(loader, CARD_LOADING)
 
         // Primary, deterministic signal: the shell command is exit-wrapped (see
@@ -134,33 +125,8 @@ class AgentTerminalView(
             spinner.suspend()
         }
         Disposer.dispose(spinner)
-        // Second chance in case the terminal implementation built its innards lazily.
-        attachScrollBar()
         cardLayout.show(this, CARD_TERMINAL)
         widget.requestFocus()
-    }
-
-    /**
-     * The embedded terminal's own scrollbar is an overlay that stays invisible unless
-     * actively scrolled, so scrollback growth gives no visual cue. This adds a plain
-     * always-rendered [JScrollBar] on the right, bound to the terminal's own scroll
-     * model (so dragging it scrolls the terminal and output moves it), shown only while
-     * the buffer actually exceeds the viewport. No-op when no inner scrollbar is found.
-     */
-    private fun attachScrollBar() {
-        if (scrollBarAttached) return
-        val innerBar = UIUtil.findComponentOfType(widget.component, JScrollBar::class.java) ?: return
-        scrollBarAttached = true
-        innerBar.isVisible = false // ours replaces the auto-hiding overlay
-        val bar = JScrollBar(Adjustable.VERTICAL)
-        bar.model = innerBar.model
-        fun updateVisibility() {
-            val m = bar.model
-            bar.isVisible = m.maximum - m.minimum > m.extent
-        }
-        bar.model.addChangeListener { updateVisibility() }
-        updateVisibility()
-        terminalHolder.addToRight(bar)
     }
 
     private fun createLoaderPanel(): JComponent {

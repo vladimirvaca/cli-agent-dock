@@ -27,7 +27,6 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -79,15 +78,9 @@ class CliAgentDockToolWindowPanel(
             })
         }
 
-        val versionLabel = JBLabel(IdeInfo.describe()).apply {
-            foreground = UIUtil.getContextHelpForeground()
-            toolTipText = CliAgentDockBundle["ide.version.tooltip"]
-        }
-
         val toolbar = BorderLayoutPanel().apply {
             border = JBUI.Borders.empty(4, 6)
             addToLeft(controls)
-            addToRight(versionLabel)
         }
 
         thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")

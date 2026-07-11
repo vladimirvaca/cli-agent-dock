@@ -8,6 +8,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vcs.FileStatus
+import com.intellij.openapi.vcs.actions.VcsContextFactory
+import com.intellij.openapi.vcs.changes.Change
+import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vcs.changes.actions.diff.ShowDiffAction
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
@@ -25,6 +29,7 @@ import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
+import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.Image
@@ -36,13 +41,20 @@ import javax.swing.BorderFactory
 import javax.swing.Icon
 import javax.swing.ImageIcon
 import javax.swing.JList
+import javax.swing.ListCellRenderer
+import javax.swing.SwingUtilities
 
 /**
  * The "Files changed" strip shown below a session's terminal, listing what the agent
  * touched (see [SessionFileChangeTracker]). Rows use the IDE's VCS colors — green
  * created, blue modified, struck-through gray deleted — and behave like hyperlinks:
- * hovering highlights and underlines a row (hand cursor), a single click opens the file
- * in the editor. Deleted rows are inert. The header offers a shortcut to the IDE's
+ * hovering highlights and underlines a row (hand cursor), a single click opens the VCS
+ * diff view for that file so the change is visible without leaving the tool window. A
+ * small open-file icon before the file-type icon offers a second, more direct action —
+ * clicking it opens the file itself instead of its diff. Deleted rows have nothing to
+ * open, so that icon is hidden for them, and the row itself is only clickable (to show
+ * the diff) when Git still knows about the deletion; for files Git doesn't track at all,
+ * a row click falls back to opening the file. The header offers a shortcut to the IDE's
  * commit view; a red clear button sits in the footer's bottom-right corner, apart from
  * the other actions since it's destructive. The owner shows/hides the whole panel, so it
  * renders assuming content.
@@ -55,7 +67,16 @@ class ChangedFilesPanel(
 
     private val basePath = FileUtil.toSystemIndependentName(basePath)
     private val model = CollectionListModel<ChangedFile>()
-    private val list = JBList(model)
+
+    // getToolTipText is overridden because JList renderers aren't real interactive
+    // children: without this, hovering the open-file icon would show no tooltip at all.
+    private val list = object : JBList<ChangedFile>(model) {
+        override fun getToolTipText(event: MouseEvent): String? {
+            val row = locationToIndex(event.point)
+            if (row < 0 || !onOpenIcon(event, row)) return null
+            return CliAgentDockBundle["changedFiles.openFile.tooltip"]
+        }
+    }
     private val countLabel = JBLabel()
     private var rawCountText = ""
     private val scroll = JBScrollPane(list).apply { border = JBUI.Borders.empty() }
@@ -76,36 +97,61 @@ class ChangedFilesPanel(
     /** Row index under the mouse, -1 when none; drives the hyperlink hover rendering. */
     private var hoveredIndex = -1
 
-    init {
-        list.cellRenderer = object : ColoredListCellRenderer<ChangedFile>() {
-            override fun customizeCellRenderer(
-                list: JList<out ChangedFile>,
-                value: ChangedFile,
-                index: Int,
-                selected: Boolean,
-                hasFocus: Boolean,
-            ) {
-                val name = value.path.substringAfterLast('/')
-                icon = FileTypeManager.getInstance().getFileTypeByFileName(name).icon
-                val relative = FileUtil.getRelativePath(basePath, value.path, '/') ?: value.path
-                val hovered = index == hoveredIndex && value.kind != ChangeKind.DELETED
-                if (hovered && !selected) {
-                    background = UIUtil.getListSelectionBackground(false)
-                }
-                append(relative, attributesFor(value.kind, hovered))
+    // The file-type icon + relative path, unchanged from before the open-file icon was
+    // added; wrapped by [rowRenderer] below so it sits to the right of that icon.
+    private val textRenderer = object : ColoredListCellRenderer<ChangedFile>() {
+        override fun customizeCellRenderer(
+            list: JList<out ChangedFile>,
+            value: ChangedFile,
+            index: Int,
+            selected: Boolean,
+            hasFocus: Boolean,
+        ) {
+            val name = value.path.substringAfterLast('/')
+            icon = FileTypeManager.getInstance().getFileTypeByFileName(name).icon
+            val relative = FileUtil.getRelativePath(basePath, value.path, '/') ?: value.path
+            val hovered = index == hoveredIndex && isClickable(value)
+            if (hovered && !selected) {
+                background = UIUtil.getListSelectionBackground(false)
             }
+            append(relative, attributesFor(value.kind, hovered))
+        }
+    }
+
+    // Hidden for deleted rows (there's nothing to open); [onOpenIcon] hit-tests clicks
+    // against this component's laid-out bounds, since JList renderers aren't real
+    // interactive children and never receive events of their own.
+    private val openIcon = JBLabel(AllIcons.Actions.EditSource).apply {
+        border = JBUI.Borders.emptyRight(4)
+    }
+
+    private val rowRenderer = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+        isOpaque = true
+        add(openIcon, BorderLayout.WEST)
+        add(textRenderer, BorderLayout.CENTER)
+    }
+
+    init {
+        list.cellRenderer = ListCellRenderer<ChangedFile> { l, value, index, selected, hasFocus ->
+            textRenderer.getListCellRendererComponent(l, value, index, selected, hasFocus)
+            rowRenderer.background = textRenderer.background
+            openIcon.background = textRenderer.background
+            openIcon.isVisible = value.kind != ChangeKind.DELETED
+            rowRenderer
         }
 
         val mouse = object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 if (e.button != MouseEvent.BUTTON1 || e.clickCount != 1) return
-                rowAt(e)?.let { open(model.getElementAt(it)) }
+                val row = rowAt(e) ?: return
+                val value = model.getElementAt(row)
+                if (onOpenIcon(e, row)) openInEditor(value) else open(value)
             }
 
             override fun mouseMoved(e: MouseEvent) {
                 val row = rowAt(e)
                 setHovered(row ?: -1)
-                val clickable = row != null && model.getElementAt(row).kind != ChangeKind.DELETED
+                val clickable = row != null && (isClickable(model.getElementAt(row)) || onOpenIcon(e, row))
                 list.cursor =
                     if (clickable) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else Cursor.getDefaultCursor()
             }
@@ -205,10 +251,59 @@ class ChangedFilesPanel(
         list.repaint()
     }
 
+    /** A deleted row is only actionable once Git recognizes it as a change to diff against. */
+    private fun isClickable(value: ChangedFile): Boolean =
+        value.kind != ChangeKind.DELETED || changeFor(value) != null
+
+    /**
+     * Whether [e] — already known to land somewhere in [row]'s cell — lands specifically
+     * on that row's open-file icon rather than its text. [rowRenderer] isn't a real child
+     * of [list] (JList paints cell renderers, it doesn't add them to the hierarchy), so
+     * there's no component to receive its own click: the renderer is laid out at the
+     * cell's actual bounds and probed directly instead.
+     */
+    private fun onOpenIcon(e: MouseEvent, row: Int): Boolean {
+        val value = model.getElementAt(row)
+        if (value.kind == ChangeKind.DELETED) return false
+        val cellBounds = list.getCellBounds(row, row) ?: return false
+        textRenderer.getListCellRendererComponent(list, value, row, false, false)
+        openIcon.isVisible = true
+        rowRenderer.setBounds(0, 0, cellBounds.width, cellBounds.height)
+        rowRenderer.doLayout()
+        val hit = SwingUtilities.getDeepestComponentAt(rowRenderer, e.x - cellBounds.x, e.y - cellBounds.y)
+        return hit === openIcon
+    }
+
+    /**
+     * Prefers the VCS diff view — it's the more useful "what changed" surface — falling
+     * back to opening the file when there's no [Change] to diff (untracked file, no VCS
+     * root, or the [ChangeListManager] hasn't caught up yet). Deleted files have nothing
+     * to open, so they simply do nothing in that fallback case.
+     */
     private fun open(value: ChangedFile) {
+        val change = changeFor(value)
+        if (change != null) {
+            ShowDiffAction.showDiffForChange(project, listOf(change))
+        } else {
+            openInEditor(value)
+        }
+    }
+
+    private fun openInEditor(value: ChangedFile) {
         if (value.kind == ChangeKind.DELETED) return
         val file = LocalFileSystem.getInstance().findFileByPath(value.path) ?: return
         OpenFileDescriptor(project, file).navigate(true)
+    }
+
+    private fun changeFor(value: ChangedFile): Change? {
+        val changeListManager = ChangeListManager.getInstance(project)
+        return if (value.kind == ChangeKind.DELETED) {
+            val deletedPath = VcsContextFactory.getInstance().createFilePath(value.path, false)
+            changeListManager.getChange(deletedPath)
+        } else {
+            val file = LocalFileSystem.getInstance().findFileByPath(value.path) ?: return null
+            changeListManager.getChange(file)
+        }
     }
 
     /** Brings up the non-modal Commit tool window, falling back to Version Control (e.g. modal commit mode). */

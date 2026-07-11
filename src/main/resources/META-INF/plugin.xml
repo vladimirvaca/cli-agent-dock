@@ -18,8 +18,7 @@
         <li>Embedded terminal, pre-launched with your agent CLI in your project directory</li>
         <li>Multiple independent, closeable agent sessions per project</li>
         <li>Live "files changed" panel — see what the agent touched as it works, with
-        one-click jumps to the file or the commit view</li>
-        <li>Always-visible terminal scrollbar</li>
+        one-click diffs for each file and a jump to the commit view</li>
         <li>Cross-platform: Windows, macOS, and Linux</li>
         </ul>
     ]]></description>
