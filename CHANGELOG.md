@@ -4,13 +4,16 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-11
+
 ### Added
 
-- **Files changed panel per session** — while an agent runs, files it creates, modifies, or deletes in the project are listed in a panel below that session's terminal. Rows use VCS-style colors and act as hyperlinks: hover highlights, a single click opens the IDE's diff view for that file (falling back to opening the file itself when there's no VCS change to diff), and a small open-file icon before the filename opens it directly instead. The header jumps to the IDE's commit view and minimizes the panel to a thin strip under the terminal; a red clear button in the bottom-right corner empties the list. The panel appears only once the session changes a file.
+- **Files changed panel per session** — while an agent runs, files it creates, modifies, or deletes in the project are listed in a panel below that session's terminal. Rows use VCS-style colors and act as hyperlinks: hover highlights, a single click opens the IDE's diff view for that file (falling back to opening the file itself when there's no VCS change to diff), and an open-file icon on the hovered row opens it directly instead. The header shows the change count, jumps to the IDE's commit view, minimizes the panel to a thin strip under the terminal, and holds a red clear button that empties the list. The panel appears only once the session changes a file.
 
-### Fixed
+### Changed
 
-- The clear button in the files-changed panel now renders crisply on HiDPI screens (its red tint is applied through the platform's icon API instead of a hand-scaled bitmap).
+- **Modernized tool window look and feel** — the toolbar uses native icon actions for New Session and Restart (Restart disables itself when no session is open), the tool window stripe icon is a monochrome New UI outline (the purple branding now lives in the Marketplace/Settings plugin icon), each agent has its own icon in the picker and session tab titles, and the "agent not found" and "no active sessions" screens use the IDE's standard empty-state style with clickable actions.
+- Snappier sessions and lighter idle overhead: successful agent executable lookups are cached so new sessions and restarts skip the PATH rescan (Retry still performs a real lookup), concurrent sessions share a single periodic VFS refresh instead of scheduling one each, and the files-changed list repaints only the affected rows on hover.
 
 ### Removed
 
@@ -32,5 +35,6 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/vladimirvaca/cli-agent-dock/commits/v0.1.0
