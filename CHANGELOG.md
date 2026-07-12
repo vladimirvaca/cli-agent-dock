@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-11
+
+### Added
+
+- **The Files changed panel cleans itself up on commit** — after every VCS refresh, entries the VCS reports as clean again (committed or reverted) are removed automatically, so landing the session's work empties the panel without pressing the clear button. Files that merely await a VCS rescan are left alone, and a deleted file is only removed once the VCS actually saw its deletion.
+- **"Untracked" tag on files unknown to version control** — files the VCS doesn't track yet show a small grayed `· untracked` tag after the path, with a tooltip explaining they won't be included in commits until added. The tag disappears on its own once the file is added (e.g. `git add`).
+
+### Changed
+
+- **Calmer Files changed rows** — hover no longer highlights or underlines rows (mouse movement repaints nothing, removing the flicker); the VCS colors and hand cursor carry the affordance, and the open-file icon is now always visible on openable rows instead of appearing on hover.
+
 ### Fixed
 
 - The Files changed panel no longer starts a session pre-populated with stale entries: changes that happened while the IDE was closed used to replay on the first refresh after startup and get attributed to the fresh session. The tracker now runs a baseline refresh of the project root first and only starts recording once it completes.
@@ -40,6 +51,7 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/vladimirvaca/cli-agent-dock/commits/v0.1.0
