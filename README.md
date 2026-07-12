@@ -127,3 +127,5 @@ CLI Agent Dock is licensed under the [MIT License](./LICENSE).
 Plugin based on the [IntelliJ Platform Plugin Template][template].
 
 [template]: https://github.com/JetBrains/intellij-platform-plugin-template
+
+> **Developed with ❤️ by vladimirvaca 👽**
