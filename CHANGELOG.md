@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The Files changed panel no longer starts a session pre-populated with stale entries: changes that happened while the IDE was closed used to replay on the first refresh after startup and get attributed to the fresh session. The tracker now runs a baseline refresh of the project root first and only starts recording once it completes.
+- A newly opened agent tab no longer closes itself right after opening. The exit-detection poll could mistake the shell's boot sequence (integration scripts running, then a brief idle gap before the agent command spawns) for the agent exiting; it now starts only after the agent is ready and requires several consecutive idle samples before closing the tab.
+
 ## [0.2.0] - 2026-07-11
 
 ### Added

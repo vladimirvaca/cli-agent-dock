@@ -61,6 +61,8 @@ class AgentTerminalView(
     private var exitNotified = false
     /** The exit poll only trusts a running->stopped transition after it first saw "running". */
     private var sawCommandRunning = false
+    /** Consecutive not-running polls observed after [sawCommandRunning]; see [checkExit]. */
+    private var stoppedPolls = 0
 
     init {
         Disposer.register(parentDisposable, spinner)
@@ -70,11 +72,11 @@ class AgentTerminalView(
 
         // Primary, deterministic signal: the shell command is exit-wrapped (see
         // AgentTerminalRunner), so when the agent ends the PTY terminates and this fires.
+        // The isCommandRunning safety net only starts polling in showTerminal(): while the
+        // shell is still booting, its integration scripts register as a running command
+        // that then goes idle before the queued agent command spawns — a poll catching
+        // that gap read it as the agent exiting and closed a freshly opened tab.
         widget.addTerminationCallback({ notifyExit() }, parentDisposable)
-        // Best-effort safety net for a shell where the exit wrap didn't run (e.g. an agent
-        // hard-killed by a signal). Harmless no-op when isCommandRunning is unsupported: the
-        // "seen running" guard never flips, so it can never close the tab spuriously.
-        scheduleExitCheck()
 
         if (agent.readyMarkers.isEmpty()) {
             // Readiness cannot be detected for this agent; show the terminal directly.
@@ -90,11 +92,20 @@ class AgentTerminalView(
         alarm.addRequest(::checkExit, EXIT_POLL_INTERVAL_MS)
     }
 
+    /**
+     * Best-effort safety net for a shell where the exit wrap didn't run (e.g. an agent
+     * hard-killed by a signal). Harmless no-op when isCommandRunning is unsupported: the
+     * "seen running" guard never flips, so it can never close the tab spuriously. A stop
+     * only counts after [STOPPED_CONFIRM_POLLS] consecutive misses, so a momentary idle
+     * blip (an agent with no ready markers still spawning after the shell prompt, or a
+     * flaky isCommandRunning read) doesn't close a live tab.
+     */
     private fun checkExit() {
         if (exitNotified) return
         if (widget.isCommandRunning()) {
             sawCommandRunning = true
-        } else if (sawCommandRunning) {
+            stoppedPolls = 0
+        } else if (sawCommandRunning && ++stoppedPolls >= STOPPED_CONFIRM_POLLS) {
             // The agent was running and is now gone, but the shell is still alive.
             notifyExit()
             return
@@ -130,6 +141,9 @@ class AgentTerminalView(
         Disposer.dispose(spinner)
         cardLayout.show(this, CARD_TERMINAL)
         widget.requestFocus()
+        // Only now is the agent known to be up (marker seen) or long past the shell-boot
+        // phase (timeout), so the exit poll can no longer mistake startup for an exit.
+        scheduleExitCheck()
     }
 
     private fun createLoaderPanel(): JComponent {
@@ -157,6 +171,9 @@ class AgentTerminalView(
         // Slower cadence for the always-on exit watch (the deterministic close comes from
         // addTerminationCallback; this poll is only a best-effort net), so it stays cheap.
         private const val EXIT_POLL_INTERVAL_MS = 500
+        // Consecutive not-running polls (after having seen the command run) required to
+        // treat the agent as exited; see checkExit.
+        private const val STOPPED_CONFIRM_POLLS = 3
         private const val CARD_TERMINAL = "terminal"
         private const val CARD_LOADING = "loading"
     }

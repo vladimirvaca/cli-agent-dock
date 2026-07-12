@@ -6,9 +6,11 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.RefreshQueue
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileCopyEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent
@@ -51,17 +53,45 @@ class SessionFileChangeTracker(
     @Volatile
     private var disposed = false
 
+    /** True once the baseline refresh completed and external changes are being recorded. */
+    @Volatile
+    var isActive: Boolean = false
+        private set
+
     /** Keyed by path so repeated events on one file collapse into a single entry. */
     private val changes = LinkedHashMap<String, ChangedFile>()
 
     private val refreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
 
     init {
+        Disposer.register(parentDisposable) { disposed = true }
+        startAfterBaselineRefresh(parentDisposable)
+    }
+
+    /**
+     * Changes made while the IDE was closed surface as refresh events too, on the first
+     * refresh after startup — recording from the moment of construction would attribute
+     * that backlog to a session that did nothing yet. So the tracked root is refreshed
+     * first, flushing any pending external changes into the VFS, and the listener only
+     * subscribes once that baseline pass completes: every session starts out clean.
+     */
+    private fun startAfterBaselineRefresh(parentDisposable: Disposable) {
+        val root = LocalFileSystem.getInstance().findFileByPath(basePath)
+        if (root == null) {
+            start(parentDisposable)
+            return
+        }
+        RefreshQueue.getInstance().refresh(true, true, { start(parentDisposable) }, root)
+    }
+
+    /** Runs on the EDT (refresh finish action), as does disposal, so the guard is race-free. */
+    private fun start(parentDisposable: Disposable) {
+        if (disposed) return
         ApplicationManager.getApplication().messageBus
             .connect(parentDisposable)
             .subscribe(VirtualFileManager.VFS_CHANGES, this)
-        Disposer.register(parentDisposable) { disposed = true }
-        thisLogger().info("Tracking external file changes under ${this.basePath}")
+        isActive = true
+        thisLogger().info("Tracking external file changes under $basePath")
         scheduleRefreshNudge()
     }
 
