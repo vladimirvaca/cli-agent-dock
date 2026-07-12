@@ -4,8 +4,16 @@ import com.intellij.ide.SaveAndSyncHandler
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.vcs.FilePath
+import com.intellij.openapi.vcs.FileStatus
+import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.openapi.vcs.actions.VcsContextFactory
+import com.intellij.openapi.vcs.changes.ChangeListListener
+import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -38,11 +46,17 @@ data class ChangedFile(val path: String, val kind: ChangeKind)
  * simplicity is attribution granularity: any external writer during the session (another
  * agent tab, a `git pull` in another terminal) is counted too.
  *
+ * The list also empties itself as the work lands in the VCS: after every
+ * [ChangeListManager] update, entries the VCS reports clean again — which is what a
+ * commit (or revert) looks like from here — are pruned, so committing the session's
+ * changes clears the panel without anyone pressing the clear button.
+ *
  * The listener lives on the application message bus scoped to [parentDisposable], so it
  * stops with the session (close or restart). [onChanged] receives the full cumulative
  * snapshot after every change, always on the EDT and never after disposal.
  */
 class SessionFileChangeTracker(
+    private val project: Project,
     basePath: String,
     parentDisposable: Disposable,
     private val onChanged: (List<ChangedFile>) -> Unit,
@@ -60,6 +74,14 @@ class SessionFileChangeTracker(
 
     /** Keyed by path so repeated events on one file collapse into a single entry. */
     private val changes = LinkedHashMap<String, ChangedFile>()
+
+    /**
+     * Deleted paths the [ChangeListManager] has shown a pending change for at some point.
+     * Only those may be pruned when their change later disappears (= the deletion was
+     * committed); a deletion the VCS never saw (an untracked file) has no commit to wait
+     * for and stays listed as the session's record of it.
+     */
+    private val deletionsSeenByVcs = HashSet<String>()
 
     private val refreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
 
@@ -90,6 +112,16 @@ class SessionFileChangeTracker(
         ApplicationManager.getApplication().messageBus
             .connect(parentDisposable)
             .subscribe(VirtualFileManager.VFS_CHANGES, this)
+        // changeListUpdateDone fires (on the CLM update thread) after the VCS finished
+        // rescanning — the moment a commit's effect is actually visible to us.
+        ChangeListManager.getInstance(project).addChangeListListener(
+            object : ChangeListListener {
+                override fun changeListUpdateDone() {
+                    ApplicationManager.getApplication().invokeLater({ onVcsStateSettled() }, { disposed })
+                }
+            },
+            parentDisposable,
+        )
         isActive = true
         thisLogger().info("Tracking external file changes under $basePath")
         scheduleRefreshNudge()
@@ -111,9 +143,67 @@ class SessionFileChangeTracker(
 
     /** Forgets everything recorded so far and notifies with an empty snapshot. */
     fun clear() {
+        deletionsSeenByVcs.clear()
         if (changes.isEmpty()) return
         changes.clear()
         fireChanged()
+    }
+
+    /**
+     * Reconciles the recorded changes with what the VCS now reports: entries it considers
+     * clean again were committed (or reverted) and leave the list. Fires even when nothing
+     * was pruned — per-file VCS statuses feeding the panel (its "untracked" tags) may have
+     * changed with this same update, e.g. after a `git add`.
+     */
+    private fun onVcsStateSettled() {
+        if (changes.isEmpty()) return
+        pruneCommitted()
+        fireChanged()
+    }
+
+    private fun pruneCommitted() {
+        val changeListManager = ChangeListManager.getInstance(project)
+        val vcsManager = ProjectLevelVcsManager.getInstance(project)
+        val contextFactory = VcsContextFactory.getInstance()
+        val fileSystem = LocalFileSystem.getInstance()
+
+        val prunable = ArrayList<String>()
+        // Clean-looking files still awaiting a VCS rescan must not be pruned yet: their
+        // change was recorded, but the CLM update that just finished predates it.
+        val cleanLooking = ArrayList<Pair<String, FilePath>>()
+
+        for (entry in changes.values) {
+            val filePath = contextFactory.createFilePath(entry.path, false)
+            // No VCS root here (or no VCS at all): nothing ever gets committed, keep it.
+            if (vcsManager.getVcsFor(filePath) == null) continue
+            if (entry.kind == ChangeKind.DELETED) {
+                if (changeListManager.getChange(filePath) != null) {
+                    deletionsSeenByVcs.add(entry.path)
+                } else if (entry.path in deletionsSeenByVcs) {
+                    prunable.add(entry.path)
+                }
+            } else {
+                val file = fileSystem.findFileByPath(entry.path) ?: continue
+                if (changeListManager.getStatus(file) == FileStatus.NOT_CHANGED) {
+                    cleanLooking.add(entry.path to filePath)
+                }
+            }
+        }
+
+        if (cleanLooking.isNotEmpty()) {
+            val stillDirty = VcsDirtyScopeManager.getInstance(project)
+                .whatFilesDirty(cleanLooking.map { it.second })
+                .toSet()
+            cleanLooking.filter { it.second !in stillDirty }.mapTo(prunable) { it.first }
+        }
+
+        for (path in prunable) {
+            changes.remove(path)
+            deletionsSeenByVcs.remove(path)
+        }
+        if (prunable.isNotEmpty()) {
+            thisLogger().info("Pruned ${prunable.size} committed entr${if (prunable.size == 1) "y" else "ies"}")
+        }
     }
 
     override fun after(events: List<VFileEvent>) {
@@ -142,6 +232,8 @@ class SessionFileChangeTracker(
         if (!isTracked(path)) return false
         val merged = merge(changes[path]?.kind, incoming)
         if (merged == null) changes.remove(path) else changes[path] = ChangedFile(path, merged)
+        // A file that exists again (recreated after a delete) starts a fresh VCS story.
+        if (merged != ChangeKind.DELETED) deletionsSeenByVcs.remove(path)
         return true
     }
 

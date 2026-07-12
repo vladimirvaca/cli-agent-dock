@@ -276,7 +276,7 @@ class CliAgentDockToolWindowPanel(
             }
 
             changedFiles.onMinimizedChanged = { placeChangedFiles() }
-            tracker = SessionFileChangeTracker(workingDir, sessionDisposable) { changes ->
+            tracker = SessionFileChangeTracker(project, workingDir, sessionDisposable) { changes ->
                 hasChanges = changes.isNotEmpty()
                 changedFiles.update(changes)
                 placeChangedFiles()

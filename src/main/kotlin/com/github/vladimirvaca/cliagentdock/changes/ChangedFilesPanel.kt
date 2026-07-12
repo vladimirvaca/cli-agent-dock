@@ -31,7 +31,7 @@ import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.icons.toStrokeIcon
 import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
+import com.intellij.util.ui.NamedColorUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.BorderLayout
 import java.awt.Cursor
@@ -45,18 +45,19 @@ import javax.swing.SwingUtilities
 /**
  * The "Files changed" strip shown below a session's terminal, listing what the agent
  * touched (see [SessionFileChangeTracker]). Rows use the IDE's VCS colors — green
- * created, blue modified, struck-through gray deleted — and behave like hyperlinks:
- * hovering highlights and underlines a row (hand cursor), a single click opens the VCS
- * diff view for that file so the change is visible without leaving the tool window. A
- * small open-file icon before the file-type icon offers a second, more direct action —
- * clicking it opens the file itself instead of its diff. It appears only on the hovered
- * row (an empty placeholder keeps the geometry stable elsewhere). Deleted rows have
- * nothing to open, so they never show it, and the row itself is only clickable (to show
- * the diff) when Git still knows about the deletion; for files Git doesn't track at all,
- * a row click falls back to opening the file. The header offers a shortcut to the IDE's
- * commit view on the left and, on the right, a red clear button — set apart from the
- * minimize chevron by a wider gap since it's destructive. The owner shows/hides the
- * whole panel, so it renders assuming content.
+ * created, blue modified, struck-through gray deleted — and deliberately don't restyle
+ * on hover: mouse movement repaints nothing, so the list stays calm; the hand cursor is
+ * the only hover feedback. A single click opens the VCS diff view for that file so the
+ * change is visible without leaving the tool window. A small open-file icon before the
+ * file-type icon offers a second, more direct action — clicking it opens the file itself
+ * instead of its diff. Deleted rows have nothing to open, so they don't show it, and the
+ * row itself is only clickable (to show the diff) when Git still knows about the
+ * deletion; for files Git doesn't track at all, a row click falls back to opening the
+ * file. Files the VCS doesn't know yet carry a quiet grayed "untracked" tag after the
+ * path, so it's obvious at a glance which changes a commit would silently skip. The
+ * header offers a shortcut to the IDE's commit view on the left and, on the right, a red
+ * clear button — set apart from the minimize chevron by a wider gap since it's
+ * destructive. The owner shows/hides the whole panel, so it renders assuming content.
  */
 class ChangedFilesPanel(
     private val project: Project,
@@ -68,12 +69,16 @@ class ChangedFilesPanel(
     private val model = CollectionListModel<ChangedFile>()
 
     // getToolTipText is overridden because JList renderers aren't real interactive
-    // children: without this, hovering the open-file icon would show no tooltip at all.
+    // children: without this, hovering the open-file icon (or an untracked row) would
+    // show no tooltip at all.
     private val list = object : JBList<ChangedFile>(model) {
         override fun getToolTipText(event: MouseEvent): String? {
-            val row = locationToIndex(event.point)
-            if (row < 0 || !onOpenIcon(event, row)) return null
-            return CliAgentDockBundle["changedFiles.openFile.tooltip"]
+            val row = rowAt(event) ?: return null
+            if (onOpenIcon(event, row)) return CliAgentDockBundle["changedFiles.openFile.tooltip"]
+            if (model.getElementAt(row).path in untrackedPaths) {
+                return CliAgentDockBundle["changedFiles.untracked.tooltip"]
+            }
+            return null
         }
     }
     // A SimpleColoredComponent rather than a JBLabel so the hover underline is a text
@@ -99,11 +104,14 @@ class ChangedFilesPanel(
     /** Notified after [isMinimized] flips, so the owner can re-place the panel. */
     var onMinimizedChanged: () -> Unit = {}
 
-    /** Row index under the mouse, -1 when none; drives the hyperlink hover rendering. */
-    private var hoveredIndex = -1
+    /**
+     * Paths (of the currently shown changes) the VCS reports as unversioned, recomputed
+     * on every [update] so the renderer never queries VCS state during paint.
+     */
+    private var untrackedPaths: Set<String> = emptySet()
 
-    // The file-type icon + relative path, unchanged from before the open-file icon was
-    // added; wrapped by [rowRenderer] below so it sits to the right of that icon.
+    // The file-type icon + relative path, wrapped by [rowRenderer] below so it sits to
+    // the right of the open-file icon.
     private val textRenderer = object : ColoredListCellRenderer<ChangedFile>() {
         override fun customizeCellRenderer(
             list: JList<out ChangedFile>,
@@ -115,18 +123,18 @@ class ChangedFilesPanel(
             val name = value.path.substringAfterLast('/')
             icon = FileTypeManager.getInstance().getFileTypeByFileName(name).icon
             val relative = FileUtil.getRelativePath(basePath, value.path, '/') ?: value.path
-            val hovered = index == hoveredIndex && isClickable(value)
-            if (hovered && !selected) {
-                background = UIUtil.getListSelectionBackground(false)
+            append(relative, attributesFor(value.kind))
+            if (value.path in untrackedPaths) {
+                append("  ·  " + CliAgentDockBundle["changedFiles.untracked.label"], untrackedAttributes())
             }
-            append(relative, attributesFor(value.kind, hovered))
         }
     }
 
-    // Shows [AllIcons.Actions.EditSource] only on the hovered row; elsewhere an empty
-    // icon of the same size keeps rows from shifting as the mouse moves. [onOpenIcon]
-    // hit-tests clicks against this component's laid-out bounds, since JList renderers
-    // aren't real interactive children and never receive events of their own.
+    // Shows [AllIcons.Actions.EditSource] on every openable row (an empty icon keeps
+    // deleted rows aligned). Always visible so nothing appears or vanishes as the mouse
+    // moves. [onOpenIcon] hit-tests clicks against this component's laid-out bounds,
+    // since JList renderers aren't real interactive children and never receive events
+    // of their own.
     private val openIcon = JBLabel(EmptyIcon.ICON_16).apply {
         border = JBUI.Borders.emptyRight(4)
     }
@@ -142,7 +150,7 @@ class ChangedFilesPanel(
             textRenderer.getListCellRendererComponent(l, value, index, selected, hasFocus)
             rowRenderer.background = textRenderer.background
             openIcon.background = textRenderer.background
-            openIcon.icon = if (value.kind != ChangeKind.DELETED && index == hoveredIndex) {
+            openIcon.icon = if (value.kind != ChangeKind.DELETED) {
                 AllIcons.Actions.EditSource
             } else {
                 EmptyIcon.ICON_16
@@ -158,16 +166,16 @@ class ChangedFilesPanel(
                 if (onOpenIcon(e, row)) openInEditor(value) else open(value)
             }
 
+            // The hand cursor is the only hover feedback — no repaint happens on mouse
+            // movement, keeping the list visually still while the pointer crosses it.
             override fun mouseMoved(e: MouseEvent) {
                 val row = rowAt(e)
-                setHovered(row ?: -1)
                 val clickable = row != null && (isClickable(model.getElementAt(row)) || onOpenIcon(e, row))
                 list.cursor =
                     if (clickable) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else Cursor.getDefaultCursor()
             }
 
             override fun mouseExited(e: MouseEvent) {
-                setHovered(-1)
                 list.cursor = Cursor.getDefaultCursor()
             }
         }
@@ -240,10 +248,25 @@ class ChangedFilesPanel(
 
     /** Replaces the shown list with the tracker's latest cumulative snapshot. */
     fun update(changes: List<ChangedFile>) {
-        hoveredIndex = -1
+        untrackedPaths = untrackedIn(changes)
         model.replaceAll(changes)
         changeCount = changes.size
         renderCountLabel()
+    }
+
+    /** Which of [changes] the VCS reports as unversioned; empty when the project has no VCS. */
+    private fun untrackedIn(changes: List<ChangedFile>): Set<String> {
+        if (changes.isEmpty()) return emptySet()
+        val changeListManager = ChangeListManager.getInstance(project)
+        val fileSystem = LocalFileSystem.getInstance()
+        return changes.asSequence()
+            .filter { it.kind != ChangeKind.DELETED }
+            .filter { changed ->
+                val file = fileSystem.findFileByPath(changed.path)
+                file != null && changeListManager.getStatus(file) == FileStatus.UNKNOWN
+            }
+            .map { it.path }
+            .toSet()
     }
 
     private fun setCountHovered(hovered: Boolean) {
@@ -266,21 +289,6 @@ class ChangedFilesPanel(
         val index = list.locationToIndex(e.point)
         if (index < 0 || !list.getCellBounds(index, index).contains(e.point)) return null
         return index
-    }
-
-    private fun setHovered(index: Int) {
-        if (hoveredIndex == index) return
-        val previous = hoveredIndex
-        hoveredIndex = index
-        // Hover only restyles the row left and the row entered; repainting just those
-        // two cells keeps mouse movement from redrawing the whole list.
-        repaintRow(previous)
-        repaintRow(index)
-    }
-
-    private fun repaintRow(index: Int) {
-        if (index < 0 || index >= model.size) return
-        list.getCellBounds(index, index)?.let { list.repaint(it) }
     }
 
     /** A deleted row is only actionable once Git recognizes it as a change to diff against. */
@@ -345,10 +353,9 @@ class ChangedFilesPanel(
         toolWindow?.activate(null)
     }
 
-    private fun attributesFor(kind: ChangeKind, hovered: Boolean): SimpleTextAttributes {
-        val style = when {
-            kind == ChangeKind.DELETED -> SimpleTextAttributes.STYLE_STRIKEOUT
-            hovered -> SimpleTextAttributes.STYLE_PLAIN or SimpleTextAttributes.STYLE_UNDERLINE
+    private fun attributesFor(kind: ChangeKind): SimpleTextAttributes {
+        val style = when (kind) {
+            ChangeKind.DELETED -> SimpleTextAttributes.STYLE_STRIKEOUT
             else -> SimpleTextAttributes.STYLE_PLAIN
         }
         val color = when (kind) {
@@ -358,6 +365,12 @@ class ChangedFilesPanel(
         }
         return SimpleTextAttributes(style, color)
     }
+
+    // Built per render (not a constant) so the color follows theme switches.
+    private fun untrackedAttributes() = SimpleTextAttributes(
+        SimpleTextAttributes.STYLE_SMALLER or SimpleTextAttributes.STYLE_ITALIC,
+        NamedColorUtil.getInactiveTextColor(),
+    )
 }
 
 /** Destructive-action red, tuned per theme: deeper on light backgrounds, softer on dark. */

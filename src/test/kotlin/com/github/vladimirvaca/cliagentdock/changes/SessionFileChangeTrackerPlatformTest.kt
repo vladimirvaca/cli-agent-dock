@@ -30,7 +30,7 @@ class SessionFileChangeTrackerPlatformTest : HeavyPlatformTestCase() {
      * invisible, so each test must wait for activation before changing files.
      */
     private fun trackActively(path: String, onChanged: (List<ChangedFile>) -> Unit) {
-        val tracker = SessionFileChangeTracker(path, testRootDisposable, onChanged)
+        val tracker = SessionFileChangeTracker(project, path, testRootDisposable, onChanged)
         PlatformTestUtil.waitWithEventsDispatching("tracker never became active", tracker::isActive, 30)
     }
 
