@@ -55,6 +55,11 @@ changelog {
 
 // IntelliJ Platform Gradle Plugin configuration - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html
 intellijPlatform {
+    // Skips booting a headless IDE during buildPlugin — usually its slowest step.
+    // Trade-off: the plugin's settings aren't indexed for the Settings dialog's
+    // search box; re-enable if searchable settings ever matter more than build time.
+    buildSearchableOptions = false
+
     pluginConfiguration {
         version = providers.gradleProperty("version")
 

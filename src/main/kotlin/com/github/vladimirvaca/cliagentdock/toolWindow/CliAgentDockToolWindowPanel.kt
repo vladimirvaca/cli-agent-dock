@@ -21,6 +21,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -35,9 +36,13 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.panels.HorizontalLayout
+import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.CardLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.io.File
 import javax.swing.JComponent
 import javax.swing.SwingConstants
 
@@ -202,6 +207,22 @@ class CliAgentDockToolWindowPanel(
         }
 
     /**
+     * Shown while the agent executable is being resolved on a pooled thread: the same
+     * spinner-on-editor-background look as [AgentTerminalView]'s startup loader, so the
+     * two phases read as one continuous "starting up".
+     */
+    private fun createResolvingPanel(parentDisposable: Disposable): JComponent {
+        val spinner = AsyncProcessIcon.createBig("CliAgentDockResolve")
+        Disposer.register(parentDisposable, spinner)
+        spinner.resume()
+        return JBPanel<JBPanel<*>>(GridBagLayout()).apply {
+            isOpaque = true
+            background = EditorColorsManager.getInstance().globalScheme.defaultBackground
+            add(spinner, GridBagConstraints())
+        }
+    }
+
+    /**
      * A single agent tab. The [header] (title + close button) is stable across restarts,
      * so tab lookups use [JBTabbedPane.indexOfTabComponent] rather than caching an index
      * that would drift as other tabs are opened or closed. Each content component carries
@@ -254,13 +275,43 @@ class CliAgentDockToolWindowPanel(
         private fun createContent(): JComponent =
             buildContent().apply { putClientProperty(SESSION_KEY, this@AgentSession) }
 
+        /**
+         * Resolution scans PATH and well-known install dirs — real disk I/O on a cache
+         * miss (on Windows it stats every WinGet package dir) — so it runs on a pooled
+         * thread instead of freezing the EDT on first open or retry. The returned
+         * container shows a spinner meanwhile and swaps in the terminal (or the
+         * not-found panel) when the lookup lands; a session restarted or closed while
+         * resolving just drops the stale result via the expired condition.
+         */
         private fun buildContent(): JComponent {
-            val executable = AgentExecutableResolver.resolve(agent)
-            if (executable == null) {
-                return createNotFoundPanel(agent, onRetry = ::restart)
-            }
             val sessionDisposable = Disposer.newDisposable(parentDisposable, "CliAgentDockTerminalSession")
             disposable = sessionDisposable
+            // Disposal and the expired check both run on the EDT, so a plain flag suffices.
+            var expired = false
+            Disposer.register(sessionDisposable) { expired = true }
+            val container = BorderLayoutPanel().addToCenter(createResolvingPanel(sessionDisposable))
+            ApplicationManager.getApplication().executeOnPooledThread {
+                val executable = AgentExecutableResolver.resolve(agent)
+                ApplicationManager.getApplication().invokeLater(
+                    {
+                        container.removeAll()
+                        val content = if (executable == null) {
+                            createNotFoundPanel(agent, onRetry = ::restart)
+                        } else {
+                            createTerminalContent(sessionDisposable, executable)
+                        }
+                        container.addToCenter(content)
+                        container.revalidate()
+                        container.repaint()
+                    },
+                    { expired },
+                )
+            }
+            return container
+        }
+
+        /** The live terminal plus the session's changed-files tracking, wired together. */
+        private fun createTerminalContent(sessionDisposable: Disposable, executable: File): JComponent {
             val workingDir = project.basePath ?: System.getProperty("user.home")
             lateinit var view: AgentTerminalView
             view = AgentTerminalView(project, sessionDisposable, workingDir, agent, executable) {

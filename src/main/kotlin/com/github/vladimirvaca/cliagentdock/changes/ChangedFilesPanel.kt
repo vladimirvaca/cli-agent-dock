@@ -40,7 +40,6 @@ import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.JList
 import javax.swing.ListCellRenderer
-import javax.swing.SwingUtilities
 
 /**
  * The "Files changed" strip shown below a session's terminal, listing what the agent
@@ -327,19 +326,16 @@ class ChangedFilesPanel(
      * Whether [e] — already known to land somewhere in [row]'s cell — lands specifically
      * on that row's open-file icon rather than its text. [rowRenderer] isn't a real child
      * of [list] (JList paints cell renderers, it doesn't add them to the hierarchy), so
-     * there's no component to receive its own click: the renderer is laid out at the
-     * cell's actual bounds and probed directly instead.
+     * there's no component to receive its own click. But the icon occupies a fixed-width
+     * strip at the cell's left edge (BorderLayout WEST gives [openIcon] its preferred
+     * width, full height), so an x-offset comparison answers the question without
+     * re-rendering and laying out the row on every mouse move.
      */
     private fun onOpenIcon(e: MouseEvent, row: Int): Boolean {
         val value = model.getElementAt(row)
         if (value.kind == ChangeKind.DELETED) return false
         val cellBounds = list.getCellBounds(row, row) ?: return false
-        textRenderer.getListCellRendererComponent(list, value, row, false, false)
-        openIcon.icon = AllIcons.Actions.EditSource
-        rowRenderer.setBounds(0, 0, cellBounds.width, cellBounds.height)
-        rowRenderer.doLayout()
-        val hit = SwingUtilities.getDeepestComponentAt(rowRenderer, e.x - cellBounds.x, e.y - cellBounds.y)
-        return hit === openIcon
+        return e.x - cellBounds.x < openIcon.preferredSize.width
     }
 
     /**

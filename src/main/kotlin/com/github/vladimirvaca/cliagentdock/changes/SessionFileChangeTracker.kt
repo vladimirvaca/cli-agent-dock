@@ -69,6 +69,11 @@ class SessionFileChangeTracker(
 
     private val basePath = FileUtil.toSystemIndependentName(basePath)
 
+    // Fetched once: [isTracked] runs per VFS event on the EDT inside a write action,
+    // so the hot path shouldn't pay two service lookups per file.
+    private val vcsIgnoreManager = VcsIgnoreManager.getInstance(project)
+    private val vcsContextFactory = VcsContextFactory.getInstance()
+
     /** Wall-clock start of the session; anything on disk older than this predates it. */
     private val sessionStartMillis = System.currentTimeMillis()
 
@@ -172,7 +177,6 @@ class SessionFileChangeTracker(
     private fun pruneCommitted() {
         val changeListManager = ChangeListManager.getInstance(project)
         val vcsManager = ProjectLevelVcsManager.getInstance(project)
-        val contextFactory = VcsContextFactory.getInstance()
         val fileSystem = LocalFileSystem.getInstance()
 
         val prunable = ArrayList<String>()
@@ -181,7 +185,7 @@ class SessionFileChangeTracker(
         val cleanLooking = ArrayList<Pair<String, FilePath>>()
 
         for (entry in changes.values) {
-            val filePath = contextFactory.createFilePath(entry.path, false)
+            val filePath = vcsContextFactory.createFilePath(entry.path, false)
             // No VCS root here (or no VCS at all): nothing ever gets committed, keep it.
             if (vcsManager.getVcsFor(filePath) == null) continue
             if (entry.kind == ChangeKind.DELETED) {
@@ -296,9 +300,7 @@ class SessionFileChangeTracker(
     private fun isTracked(path: String): Boolean =
         FileUtil.isAncestor(basePath, path, true) &&
             !path.contains("/.git/") && !path.endsWith("/.git") &&
-            !VcsIgnoreManager.getInstance(project).isPotentiallyIgnoredFile(
-                VcsContextFactory.getInstance().createFilePath(path, false),
-            )
+            !vcsIgnoreManager.isPotentiallyIgnoredFile(vcsContextFactory.createFilePath(path, false))
 
     private fun fireChanged() {
         val snapshot = changes.values.toList()
@@ -333,6 +335,10 @@ class SessionFileChangeTracker(
          * keeps N open sessions from queueing N refreshes per interval.
          */
         private fun nudgeIfDue() {
+            // A backgrounded IDE refreshes on frame activation anyway, so nudging it
+            // only burns cycles on updates nobody sees; the next tick after focus
+            // returns (≤ one interval) resumes live updates.
+            if (!ApplicationManager.getApplication().isActive) return
             val now = System.nanoTime()
             val last = lastNudgeNanos.get()
             val due = last == Long.MIN_VALUE ||
