@@ -14,6 +14,7 @@ import com.intellij.openapi.vcs.actions.VcsContextFactory
 import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
+import com.intellij.openapi.vcs.changes.VcsIgnoreManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -191,8 +192,12 @@ class SessionFileChangeTracker(
                 }
             } else {
                 val file = fileSystem.findFileByPath(entry.path) ?: continue
-                if (changeListManager.getStatus(file) == FileStatus.NOT_CHANGED) {
-                    cleanLooking.add(entry.path to filePath)
+                when (changeListManager.getStatus(file)) {
+                    // Ignored now (e.g. a .gitignore the agent wrote mid-session caught
+                    // up with files recorded earlier): not reviewable work, drop it.
+                    FileStatus.IGNORED -> prunable.add(entry.path)
+                    FileStatus.NOT_CHANGED -> cleanLooking.add(entry.path to filePath)
+                    else -> {}
                 }
             }
         }
@@ -279,9 +284,21 @@ class SessionFileChangeTracker(
         return timeStamp < sessionStartMillis - TIMESTAMP_SLACK_MS
     }
 
+    /**
+     * Inside the tracked root, not git bookkeeping, and not VCS-ignored. Ignored files
+     * (build output, caches — whatever .gitignore and the IDE's ignore providers
+     * cover) are side effects of the agent's work, not reviewable work, so they never
+     * enter the list. The pattern check works on a bare path, which matters here: at
+     * event time a created file may not be in the VFS yet and a deleted one is already
+     * gone. It is fast-but-approximate by contract; [pruneCommitted] holds the precise
+     * complement, dropping entries the VCS itself later reports as ignored.
+     */
     private fun isTracked(path: String): Boolean =
         FileUtil.isAncestor(basePath, path, true) &&
-            !path.contains("/.git/") && !path.endsWith("/.git")
+            !path.contains("/.git/") && !path.endsWith("/.git") &&
+            !VcsIgnoreManager.getInstance(project).isPotentiallyIgnoredFile(
+                VcsContextFactory.getInstance().createFilePath(path, false),
+            )
 
     private fun fireChanged() {
         val snapshot = changes.values.toList()
