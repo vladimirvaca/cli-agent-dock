@@ -4,9 +4,21 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-14
+
 ### Added
 
 - **Esc now goes to the agent instead of leaving the dock** — the platform used to move focus to the editor on every Esc press inside the terminal, making it impossible to e.g. interrupt Claude Code. Esc is now delivered to the agent CLI, and leaving the dock by keyboard still works: a quick **double Esc** (within 300 ms) sends the first Esc to the agent and returns focus to the editor, and **Shift+Esc** keeps hiding the dock as usual. The double-Esc shortcut can be turned off in Settings > Tools > CLI Agent Dock for agents that bind a fast double Esc themselves (pressing the two Escs more slowly reaches such agent features either way).
+- **Settings gear in the toolbar and a toggle for the Files changed panel** — the tool window toolbar now has a settings shortcut on the far right that opens Settings > Tools > CLI Agent Dock, and a new "Show Files changed panel" setting hides the panel for those who prefer a pure terminal. Tracking keeps running while hidden, so re-enabling it mid-session brings back everything the session accumulated meanwhile.
+
+### Changed
+
+- **Snappier session startup and a lighter idle footprint** — the agent executable lookup (a real disk scan on a cold start, especially on Windows with WinGet installs) now runs in the background behind the startup spinner instead of briefly freezing the IDE on the first open or a retry, and the periodic file refresh that feeds the Files changed panel pauses while the IDE window is in the background, resuming as soon as it regains focus.
+
+### Fixed
+
+- The Files changed panel no longer lists VCS-ignored files (build output, caches — whatever .gitignore and the IDE's ignore providers cover): ignored paths are filtered out as changes arrive, and entries recorded before a .gitignore the agent wrote mid-session caught up with them are dropped as well.
+- Files that were merely *discovered* mid-session — a directory first scanned by indexing or git while the agent runs — are no longer attributed to the agent: anything whose on-disk content predates the session start stays out of the Files changed panel.
 
 ## [0.3.0] - 2026-07-11
 
@@ -55,7 +67,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/vladimirvaca/cli-agent-dock/commits/v0.1.0
