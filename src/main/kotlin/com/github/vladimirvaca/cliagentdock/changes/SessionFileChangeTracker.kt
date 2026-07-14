@@ -42,9 +42,13 @@ data class ChangedFile(val path: String, val kind: ChangeKind)
  *
  * Detection is VFS-based and agent-agnostic: the platform's native file watcher surfaces
  * external writes as refresh events ([VFileEvent.isFromRefresh]), while the user's own
- * editor changes arrive as document saves and are therefore excluded. The cost of that
- * simplicity is attribution granularity: any external writer during the session (another
- * agent tab, a `git pull` in another terminal) is counted too.
+ * editor changes arrive as document saves and are therefore excluded. Refresh also
+ * *discovers* files it never loaded before (a directory first scanned mid-session) and
+ * reports them with the same events an external write produces; those are told apart by
+ * their on-disk timestamp — content older than the session start cannot be the session's
+ * work and is ignored (see [predatesSession]). The remaining cost of this simplicity is
+ * attribution granularity: any external writer during the session (another agent tab, a
+ * `git pull` in another terminal) is counted too.
  *
  * The list also empties itself as the work lands in the VCS: after every
  * [ChangeListManager] update, entries the VCS reports clean again — which is what a
@@ -63,6 +67,9 @@ class SessionFileChangeTracker(
 ) : BulkFileListener {
 
     private val basePath = FileUtil.toSystemIndependentName(basePath)
+
+    /** Wall-clock start of the session; anything on disk older than this predates it. */
+    private val sessionStartMillis = System.currentTimeMillis()
 
     @Volatile
     private var disposed = false
@@ -218,9 +225,11 @@ class SessionFileChangeTracker(
     }
 
     private fun apply(event: VFileEvent): Boolean = when (event) {
-        is VFileCreateEvent -> !event.isDirectory && record(event.path, ChangeKind.CREATED)
+        is VFileCreateEvent ->
+            !event.isDirectory && !predatesSession(event.file) && record(event.path, ChangeKind.CREATED)
         is VFileCopyEvent -> record(event.path, ChangeKind.CREATED)
-        is VFileContentChangeEvent -> record(event.path, ChangeKind.MODIFIED)
+        is VFileContentChangeEvent ->
+            !predatesSession(event.file) && record(event.path, ChangeKind.MODIFIED)
         is VFileDeleteEvent -> !event.file.isDirectory && record(event.path, ChangeKind.DELETED)
         is VFileMoveEvent -> recordMoved(event.oldPath, event.path)
         is VFilePropertyChangeEvent ->
@@ -255,6 +264,21 @@ class SessionFileChangeTracker(
         }
     }
 
+    /**
+     * True when [file]'s on-disk timestamp clearly predates the session. Refresh events
+     * don't only report new writes: the VFS surfaces files it never loaded before (a
+     * directory first scanned mid-session by indexing, git, or the refresh nudge) as the
+     * same "create" events an external write produces. Content older than the session
+     * start cannot be this session's work, so such discoveries are dropped rather than
+     * attributed to the agent. [TIMESTAMP_SLACK_MS] absorbs coarse file-system timestamp
+     * granularity (FAT rounds down to 2s), which could otherwise make a file the agent
+     * wrote moments after the session opened look older than the session.
+     */
+    private fun predatesSession(file: VirtualFile?): Boolean {
+        val timeStamp = file?.timeStamp ?: return false
+        return timeStamp < sessionStartMillis - TIMESTAMP_SLACK_MS
+    }
+
     private fun isTracked(path: String): Boolean =
         FileUtil.isAncestor(basePath, path, true) &&
             !path.contains("/.git/") && !path.endsWith("/.git")
@@ -273,6 +297,9 @@ class SessionFileChangeTracker(
     companion object {
         /** How often to nudge a VFS refresh while the session runs. */
         private const val REFRESH_NUDGE_MS = 2_000
+
+        /** Tolerance for file-system timestamp granularity in [predatesSession]. */
+        private const val TIMESTAMP_SLACK_MS = 2_000
 
         /**
          * Alarm-timer jitter would otherwise let a lone tracker's own next tick arrive a

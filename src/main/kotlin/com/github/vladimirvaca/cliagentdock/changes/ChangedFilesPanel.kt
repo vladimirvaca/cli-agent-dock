@@ -45,9 +45,9 @@ import javax.swing.SwingUtilities
 /**
  * The "Files changed" strip shown below a session's terminal, listing what the agent
  * touched (see [SessionFileChangeTracker]). Rows use the IDE's VCS colors — green
- * created, blue modified, struck-through gray deleted — and deliberately don't restyle
- * on hover: mouse movement repaints nothing, so the list stays calm; the hand cursor is
- * the only hover feedback. A single click opens the VCS diff view for that file so the
+ * created, blue modified, struck-through gray deleted — and never paint a selection or
+ * hover background: hovering a clickable row underlines its path (plus a hand cursor),
+ * so rows read as links. A single click opens the VCS diff view for that file so the
  * change is visible without leaving the tool window. A small open-file icon before the
  * file-type icon offers a second, more direct action — clicking it opens the file itself
  * instead of its diff. Deleted rows have nothing to open, so they don't show it, and the
@@ -110,6 +110,9 @@ class ChangedFilesPanel(
      */
     private var untrackedPaths: Set<String> = emptySet()
 
+    /** Row under the mouse, underlined while hovered (if clickable); -1 when none. */
+    private var hoveredRow = -1
+
     // The file-type icon + relative path, wrapped by [rowRenderer] below so it sits to
     // the right of the open-file icon.
     private val textRenderer = object : ColoredListCellRenderer<ChangedFile>() {
@@ -123,7 +126,8 @@ class ChangedFilesPanel(
             val name = value.path.substringAfterLast('/')
             icon = FileTypeManager.getInstance().getFileTypeByFileName(name).icon
             val relative = FileUtil.getRelativePath(basePath, value.path, '/') ?: value.path
-            append(relative, attributesFor(value.kind))
+            val hovered = index == hoveredRow && isClickable(value)
+            append(relative, attributesFor(value.kind, hovered))
             if (value.path in untrackedPaths) {
                 append("  ·  " + CliAgentDockBundle["changedFiles.untracked.label"], untrackedAttributes())
             }
@@ -146,10 +150,12 @@ class ChangedFilesPanel(
     }
 
     init {
-        list.cellRenderer = ListCellRenderer<ChangedFile> { l, value, index, selected, hasFocus ->
-            textRenderer.getListCellRendererComponent(l, value, index, selected, hasFocus)
-            rowRenderer.background = textRenderer.background
-            openIcon.background = textRenderer.background
+        // Selection and focus are deliberately never rendered: rows are link-like
+        // actions, not entries to select, so no row ever gets a background highlight.
+        list.cellRenderer = ListCellRenderer<ChangedFile> { l, value, index, _, _ ->
+            textRenderer.getListCellRendererComponent(l, value, index, false, false)
+            rowRenderer.background = l.background
+            openIcon.background = l.background
             openIcon.icon = if (value.kind != ChangeKind.DELETED) {
                 AllIcons.Actions.EditSource
             } else {
@@ -166,17 +172,26 @@ class ChangedFilesPanel(
                 if (onOpenIcon(e, row)) openInEditor(value) else open(value)
             }
 
-            // The hand cursor is the only hover feedback — no repaint happens on mouse
-            // movement, keeping the list visually still while the pointer crosses it.
+            // Hover feedback is an underline on the row's path (link-style) plus the
+            // hand cursor — never a background change. Repaints are limited to the two
+            // rows whose hover state actually flipped.
             override fun mouseMoved(e: MouseEvent) {
                 val row = rowAt(e)
-                val clickable = row != null && (isClickable(model.getElementAt(row)) || onOpenIcon(e, row))
+                if (row == null) {
+                    list.cursor = Cursor.getDefaultCursor()
+                    setHoveredRow(-1)
+                    return
+                }
+                val rowClickable = isClickable(model.getElementAt(row))
+                val clickable = rowClickable || onOpenIcon(e, row)
                 list.cursor =
                     if (clickable) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else Cursor.getDefaultCursor()
+                setHoveredRow(if (rowClickable) row else -1)
             }
 
             override fun mouseExited(e: MouseEvent) {
                 list.cursor = Cursor.getDefaultCursor()
+                setHoveredRow(-1)
             }
         }
         list.addMouseListener(mouse)
@@ -284,6 +299,19 @@ class ChangedFilesPanel(
         countLabel.append(" " + CliAgentDockBundle["changedFiles.count", changeCount], SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 
+    private fun setHoveredRow(row: Int) {
+        if (hoveredRow == row) return
+        val previous = hoveredRow
+        hoveredRow = row
+        repaintRow(previous)
+        repaintRow(row)
+    }
+
+    private fun repaintRow(row: Int) {
+        if (row < 0 || row >= model.size) return
+        list.getCellBounds(row, row)?.let(list::repaint)
+    }
+
     /** The row whose cell actually contains the event point, or null (list may have dead space). */
     private fun rowAt(e: MouseEvent): Int? {
         val index = list.locationToIndex(e.point)
@@ -353,11 +381,12 @@ class ChangedFilesPanel(
         toolWindow?.activate(null)
     }
 
-    private fun attributesFor(kind: ChangeKind): SimpleTextAttributes {
-        val style = when (kind) {
+    private fun attributesFor(kind: ChangeKind, hovered: Boolean): SimpleTextAttributes {
+        var style = when (kind) {
             ChangeKind.DELETED -> SimpleTextAttributes.STYLE_STRIKEOUT
             else -> SimpleTextAttributes.STYLE_PLAIN
         }
+        if (hovered) style = style or SimpleTextAttributes.STYLE_UNDERLINE
         val color = when (kind) {
             ChangeKind.CREATED -> FileStatus.ADDED.color
             ChangeKind.MODIFIED -> FileStatus.MODIFIED.color

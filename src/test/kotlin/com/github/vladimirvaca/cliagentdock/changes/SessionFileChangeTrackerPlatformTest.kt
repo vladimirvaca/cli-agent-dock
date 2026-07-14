@@ -86,6 +86,24 @@ class SessionFileChangeTrackerPlatformTest : HeavyPlatformTestCase() {
         assertNull(snapshot)
     }
 
+    fun testFilesSurfacingWithPreSessionTimestampsAreNotAttributed() = withTempDir { dir ->
+        val vDir = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(dir)!!
+        vDir.children
+
+        var snapshot: List<ChangedFile>? = null
+        trackActively(dir.path) { snapshot = it }
+
+        // The VFS also surfaces files it simply never loaded before (a directory first
+        // scanned mid-session) as refresh create events — indistinguishable from an
+        // agent write except by the on-disk timestamp, which here predates the session.
+        val file = File(dir, "ancient.txt").apply { writeText("was always here") }
+        file.setLastModified(System.currentTimeMillis() - 60_000)
+        vDir.refresh(false, true)
+        UIUtil.dispatchAllInvocationEvents()
+
+        assertNull(snapshot)
+    }
+
     fun testChangesOutsideTheTrackedRootAreIgnored() = withTempDir { dir ->
         val tracked = File(dir, "tracked").apply { mkdirs() }
         val untracked = File(dir, "untracked").apply { mkdirs() }
