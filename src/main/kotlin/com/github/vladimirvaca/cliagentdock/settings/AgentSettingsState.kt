@@ -23,6 +23,9 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
         @JvmField
         var doubleEscFocusesEditor: Boolean = true
+
+        @JvmField
+        var showChangedFiles: Boolean = true
     }
 
     private var state = State()
@@ -48,6 +51,17 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         get() = state.doubleEscFocusesEditor
         set(value) {
             state.doubleEscFocusesEditor = value
+        }
+
+    /**
+     * Whether the "Files changed" panel appears below a session's terminal. Tracking
+     * itself always runs; this only hides the panel, so re-enabling it mid-session
+     * brings back everything the session accumulated meanwhile.
+     */
+    var showChangedFiles: Boolean
+        get() = state.showChangedFiles
+        set(value) {
+            state.showChangedFiles = value
         }
 
     /** The currently preferred agent, falling back to the default if unknown/disabled. */

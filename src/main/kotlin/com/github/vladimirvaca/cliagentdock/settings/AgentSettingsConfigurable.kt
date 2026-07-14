@@ -2,6 +2,7 @@ package com.github.vladimirvaca.cliagentdock.settings
 
 import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
 import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.bindItem
@@ -31,6 +32,20 @@ class AgentSettingsConfigurable : BoundConfigurable(CliAgentDockBundle["settings
                     { settings.doubleEscFocusesEditor = it },
                 ).comment(CliAgentDockBundle["settings.doubleEsc.comment"])
             }
+            row {
+                checkBox(CliAgentDockBundle["settings.showChangedFiles"]).bindSelected(
+                    { settings.showChangedFiles },
+                    { settings.showChangedFiles = it },
+                ).comment(CliAgentDockBundle["settings.showChangedFiles.comment"])
+            }
         }
+    }
+
+    /** Lets open sessions re-apply live-effect settings right as they change. */
+    override fun apply() {
+        super.apply()
+        ApplicationManager.getApplication().messageBus
+            .syncPublisher(AgentSettingsListener.TOPIC)
+            .settingsChanged()
     }
 }

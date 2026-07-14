@@ -6,6 +6,7 @@ import com.github.vladimirvaca.cliagentdock.agent.AgentExecutableResolver
 import com.github.vladimirvaca.cliagentdock.changes.ChangedFilesPanel
 import com.github.vladimirvaca.cliagentdock.changes.SessionFileChangeTracker
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
+import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsListener
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
 import com.github.vladimirvaca.cliagentdock.ui.AgentIcons
@@ -18,6 +19,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
@@ -97,9 +99,17 @@ class CliAgentDockToolWindowPanel(
 
         thisLogger().info("CLI Agent Dock running in ${IdeInfo.describe()}")
 
+        // Settings sits alone on the far right, away from the session controls: it
+        // configures the plugin rather than the current session, and the separation
+        // keeps it visible without competing with the actions used constantly.
+        val settingsToolbar = ActionManager.getInstance()
+            .createActionToolbar("CliAgentDockSettingsToolbar", DefaultActionGroup(SettingsAction()), true)
+        settingsToolbar.targetComponent = this
+
         toolbar = BorderLayoutPanel().apply {
             border = JBUI.Borders.empty(4, 6)
             addToLeft(controls)
+            addToRight(settingsToolbar.component.apply { isOpaque = false })
         }
         contentCards.add(tabs, CARD_SESSIONS)
         contentCards.add(emptyState, CARD_EMPTY)
@@ -137,6 +147,16 @@ class CliAgentDockToolWindowPanel(
         }
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    }
+
+    private inner class SettingsAction : AnAction(
+        CliAgentDockBundle["action.settings.text"],
+        CliAgentDockBundle["action.settings.description"],
+        AllIcons.General.Settings,
+    ), DumbAware {
+        override fun actionPerformed(e: AnActionEvent) {
+            ShowSettingsUtil.getInstance().showSettingsDialog(project, AgentSettingsConfigurable::class.java)
+        }
     }
 
     private fun selectedAgent(): Agent = agentCombo.selectedItem as? Agent ?: settings.preferredAgent
@@ -250,9 +270,9 @@ class CliAgentDockToolWindowPanel(
             liveView = view
 
             // Terminal on top; a "Files changed" panel appears below only once this
-            // session's agent modifies something, and vanishes again when cleared.
-            // Expanded it lives in the splitter (resizable); minimized it re-docks as a
-            // header-high strip pinned under the terminal.
+            // session's agent modifies something (and the setting allows it), and
+            // vanishes again when cleared. Expanded it lives in the splitter (resizable);
+            // minimized it re-docks as a header-high strip pinned under the terminal.
             val splitter = OnePixelSplitter(true, TERMINAL_PROPORTION)
             splitter.firstComponent = view
             val container = BorderLayoutPanel().addToCenter(splitter)
@@ -262,11 +282,12 @@ class CliAgentDockToolWindowPanel(
             var hasChanges = false
 
             fun placeChangedFiles() {
-                val expanded = hasChanges && !changedFiles.isMinimized
+                val shown = hasChanges && settings.showChangedFiles
+                val expanded = shown && !changedFiles.isMinimized
                 // Swing re-parents on add, so ordering matters: detach from the slot being
                 // vacated before (re)attaching to the active one.
                 splitter.secondComponent = if (expanded) changedFiles else null
-                if (hasChanges && changedFiles.isMinimized) {
+                if (shown && changedFiles.isMinimized) {
                     container.addToBottom(changedFiles)
                 } else if (!expanded) {
                     container.remove(changedFiles)
@@ -276,6 +297,11 @@ class CliAgentDockToolWindowPanel(
             }
 
             changedFiles.onMinimizedChanged = { placeChangedFiles() }
+            // Tracking runs regardless of the setting — it only gates visibility — so
+            // toggling it back on mid-session restores the accumulated list intact.
+            ApplicationManager.getApplication().messageBus
+                .connect(sessionDisposable)
+                .subscribe(AgentSettingsListener.TOPIC, AgentSettingsListener { placeChangedFiles() })
             tracker = SessionFileChangeTracker(project, workingDir, sessionDisposable) { changes ->
                 hasChanges = changes.isNotEmpty()
                 changedFiles.update(changes)
