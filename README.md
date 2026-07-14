@@ -35,6 +35,7 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 | 🗂️ **Multiple sessions** | Open several agent tabs at once, each independent and closeable. |
 | 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring and one-click jumps to the file or the commit view. |
 | 📜 **Always-visible scrollbar** | Keep track of scrollback length in the agent terminal at a glance. |
+| ⌨️ **Esc stays with the agent** | Esc interrupts the agent instead of leaving the terminal; double-tap Esc to jump back to the editor, or Shift+Esc to hide the dock. |
 | 🤖 **Claude Code by default** | Zero configuration to get started. |
 | ⚙️ **Choose your agent** | Set a preferred agent; the choice is persisted globally and remembered everywhere. |
 | 🌍 **Cross-platform** | Windows, macOS, and Linux. |

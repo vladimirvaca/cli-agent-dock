@@ -1,8 +1,12 @@
-<!-- Keep a Changelog guide -> https://keepachangelog.com -->
+~<!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
 # cli-agent-dock Changelog
 
 ## [Unreleased]
+
+### Added
+
+- **Esc now goes to the agent instead of leaving the dock** — the platform used to move focus to the editor on every Esc press inside the terminal, making it impossible to e.g. interrupt Claude Code. Esc is now delivered to the agent CLI, and leaving the dock by keyboard still works: a quick **double Esc** (within 300 ms) sends the first Esc to the agent and returns focus to the editor, and **Shift+Esc** keeps hiding the dock as usual. The double-Esc shortcut can be turned off in Settings > Tools > CLI Agent Dock for agents that bind a fast double Esc themselves (pressing the two Escs more slowly reaches such agent features either way).
 
 ## [0.3.0] - 2026-07-11
 

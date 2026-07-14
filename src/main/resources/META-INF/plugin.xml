@@ -19,6 +19,8 @@
         <li>Multiple independent, closeable agent sessions per project</li>
         <li>Live "files changed" panel — see what the agent touched as it works, with
         one-click diffs for each file and a jump to the commit view</li>
+        <li>Esc reaches the agent (e.g. to interrupt it) instead of leaving the terminal;
+        double-tap Esc to jump back to the editor, Shift+Esc to hide the dock</li>
         <li>Cross-platform: Windows, macOS, and Linux</li>
         </ul>
     ]]></description>

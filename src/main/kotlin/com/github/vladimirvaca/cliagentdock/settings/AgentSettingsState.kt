@@ -20,6 +20,9 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
     class State {
         @JvmField
         var preferredAgentId: String = AgentRegistry.DEFAULT_AGENT_ID
+
+        @JvmField
+        var doubleEscFocusesEditor: Boolean = true
     }
 
     private var state = State()
@@ -34,6 +37,17 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         get() = state.preferredAgentId
         set(value) {
             state.preferredAgentId = value
+        }
+
+    /**
+     * Whether quickly pressing Esc twice in an agent terminal moves focus back to the
+     * editor. A single Esc always goes to the agent; disabling this keeps every Esc in
+     * the terminal (for agents that bind a fast double Esc themselves).
+     */
+    var doubleEscFocusesEditor: Boolean
+        get() = state.doubleEscFocusesEditor
+        set(value) {
+            state.doubleEscFocusesEditor = value
         }
 
     /** The currently preferred agent, falling back to the default if unknown/disabled. */

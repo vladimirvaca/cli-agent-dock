@@ -67,6 +67,10 @@ class AgentTerminalView(
     init {
         Disposer.register(parentDisposable, spinner)
 
+        // Keep Esc inside the terminal (agents use it to interrupt); see the router
+        // for the double-Esc / Shift+Esc ways to leave the dock by keyboard.
+        TerminalEscapeRouter.install(project, widget, parentDisposable)
+
         add(widget.component, CARD_TERMINAL)
         add(loader, CARD_LOADING)
 

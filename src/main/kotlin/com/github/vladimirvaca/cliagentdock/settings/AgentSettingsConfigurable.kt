@@ -5,6 +5,7 @@ import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.bindItem
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 
 /**
@@ -23,6 +24,12 @@ class AgentSettingsConfigurable : BoundConfigurable(CliAgentDockBundle["settings
                     { settings.preferredAgent },
                     { agent -> agent?.let { settings.preferredAgentId = it.id } },
                 ).comment(CliAgentDockBundle["settings.preferredAgent.comment"])
+            }
+            row {
+                checkBox(CliAgentDockBundle["settings.doubleEsc"]).bindSelected(
+                    { settings.doubleEscFocusesEditor },
+                    { settings.doubleEscFocusesEditor = it },
+                ).comment(CliAgentDockBundle["settings.doubleEsc.comment"])
             }
         }
     }
