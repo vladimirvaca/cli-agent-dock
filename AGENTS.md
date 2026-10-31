@@ -27,7 +27,7 @@ one-click diffs (§4.5).
 
 ## 2. Current status
 
-**v0.5.0 is released** (2026-10-31) and the plugin is published on the
+**v0.6.0 is released** (2026-10-31) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -53,13 +53,18 @@ What's shipped, in order of arrival:
   entry with readiness markers and an icon, plus the installer bin dirs they actually use;
   and a Windows fix so an npm-installed agent runs inside the widget rather than opening
   a separate console window.
+- **v0.6.0** — the **"IDE context" milestone** (§4.8): send the current file and selected
+  lines into the running agent without submitting, every dock action registered so it is
+  findable and rebindable, and a nudge — in the IDE, or an OS notification when you are in
+  another app — when an agent goes quiet unwatched.
 
-**Current focus:** v0.6.0, the "IDE context" milestone (§4.8, §7), is built — registered
-actions, sending editor context to the running agent, and an attention notification when
-an agent goes quiet unwatched. The agent catalog is four entries deep (Claude Code, GitHub
-Copilot CLI, OpenAI Codex CLI, OpenCode) and broadening it further is explicitly *not* the
-priority; cross-agent IDE integration is. See §4 for the actual layout and §7 for the full
-done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
+**Current focus:** the "Later" ledger in §7. The agent catalog is four entries deep (Claude
+Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode) and broadening it further is
+explicitly *not* the priority; cross-agent IDE integration is, since that is what an
+official single-vendor plugin structurally cannot match. The nearest candidates are
+per-agent config (`Agent.args` already exists and is unused), custom agents, and a
+per-project agent override. See §4 for the actual layout and §7 for the full done-vs-next
+ledger; `CHANGELOG.md` is the authoritative release record.
 
 ---
 
@@ -70,7 +75,7 @@ done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
 | Language | Kotlin (JVM) |
 | Build | Gradle (Kotlin DSL) + IntelliJ Platform Gradle Plugin `2.x` |
 | Target platform | IntelliJ IDEA `2025.2.6.2` (see `build.gradle.kts`) |
-| Kotlin plugin | `2.1.20` (see `settings.gradle.kts`) |
+| Kotlin plugin | `2.4.0` (see `settings.gradle.kts`) |
 | Plugin id | `com.github.vladimirvaca.cliagentdock` |
 | Base package | `com.github.vladimirvaca.cliagentdock` |
 | Min IDE build | `since-build` in `plugin.xml` (keep in sync with target) |

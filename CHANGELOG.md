@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Added
 
 - **Send what you're looking at straight to the agent** — a new **Send File Reference to Agent** action (editor and project-view context menus, or <kbd>Ctrl+Alt+Shift+A</kbd> / <kbd>Cmd+Alt+Shift+A</kbd>) drops `@path/to/File.kt:120-145` into the running agent's prompt and stops there, leaving you to type the actual instruction. With no selection it sends just the file. It opens the dock if it's closed, and if the agent is still starting the text waits and arrives once it's ready.
@@ -84,7 +86,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...v0.3.0
