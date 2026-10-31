@@ -169,6 +169,12 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
     ends; the deterministic signal for auto-closing the tab (§4.4). Prefer it over
     `widget.isCommandRunning()`, whose interface **default just returns `false`** (verified
     by decompilation) and is only meaningfully overridden by some concrete widgets.
+  - `widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(…) }` — writes raw
+    bytes/text to the agent's **stdin**, with no trailing newline, so it types into the
+    running agent instead of submitting a line. The accessor wraps a `CompletableFuture`,
+    so the lambda simply defers until the connector exists — no "is the terminal up yet"
+    handling needed. Used by `TerminalEscapeRouter` to deliver Esc. Note `writePlainMessage`
+    is *not* this: it paints text onto the display without touching stdin.
 - We start a normal shell and send the agent command to it (rather than replacing the
   shell with the agent) so the agent inherits the user's profile PATH/env, and stay
   cross-platform. The command is exit-wrapped so the shell ends with the agent (§4.4).
@@ -395,10 +401,13 @@ In rough dependency order:
       selection into the agent's input *without* submitting, so the user types the
       instruction after. All four agents understand file references, so keep this
       cross-agent — no per-agent branches.
-      *Unknown to settle first:* `sendCommandToExecute` submits the line, so this needs a
-      plain-write path into the widget. Verify what 2025.2's `TerminalWidget` actually
-      exposes before designing around it — probe it the way `isCommandRunning` was
-      (§4.2), don't trust the interface.
+      *API settled (no risk here):* `sendCommandToExecute` submits the line, but
+      `widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(text) }` writes
+      straight to the agent's stdin with no trailing newline, and the accessor is backed
+      by a `CompletableFuture`, so it defers until the connector exists and needs no
+      "terminal still booting" handling. `TerminalEscapeRouter` already uses exactly this
+      call to deliver Esc, so the primitive is proven in-tree. Do **not** use
+      `writePlainMessage` — it paints text on the display rather than feeding stdin.
 - [ ] **Surface when an agent wants attention.** Agents block on approval prompts; with
       the dock collapsed or the IDE backgrounded that goes unnoticed. Badge the tool
       window stripe or post a `Notification` when a session goes idle after output, or on
