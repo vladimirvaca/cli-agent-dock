@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 
 - **Two more agents: OpenAI Codex CLI and OpenCode** — both now appear in the agent picker and in Settings > Tools > CLI Agent Dock, launch in the embedded terminal like Claude Code and GitHub Copilot CLI, and come with their own icon and startup spinner. Nothing to configure: install the CLI (`codex` or `opencode`) and pick it from the dropdown.
@@ -76,7 +78,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.1.0...v0.2.0
