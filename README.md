@@ -15,10 +15,10 @@ No more alt-tabbing between your IDE and a terminal tab to talk to your agent.
 Database, Gradle, and friends — with an embedded terminal that launches straight into a
 coding agent CLI, already sitting in your project directory.
 
-By default it opens with **Claude Code**, and **GitHub Copilot CLI** is supported too.
-Pick an agent from the dropdown and open as many sessions as you like — each runs in its
-own closeable tab, so you can drive several agents side by side. Your preferred agent is
-**remembered** across projects and restarts.
+By default it opens with **Claude Code**; **GitHub Copilot CLI**, **OpenAI Codex CLI**
+and **OpenCode** are supported too. Pick an agent from the dropdown and open as many
+sessions as you like — each runs in its own closeable tab, so you can drive several
+agents side by side. Your preferred agent is **remembered** across projects and restarts.
 
 CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 
@@ -36,19 +36,19 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 | 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring and one-click jumps to the file or the commit view. |
 | 📜 **Always-visible scrollbar** | Keep track of scrollback length in the agent terminal at a glance. |
 | ⌨️ **Esc stays with the agent** | Esc interrupts the agent instead of leaving the terminal; double-tap Esc to jump back to the editor, or Shift+Esc to hide the dock. |
-| 🤖 **Claude Code by default** | Zero configuration to get started. |
+| 🤖 **Claude Code by default** | Zero configuration to get started — plus Copilot CLI, Codex CLI, and OpenCode. |
 | ⚙️ **Choose your agent** | Set a preferred agent; the choice is persisted globally and remembered everywhere. |
 | 🌍 **Cross-platform** | Windows, macOS, and Linux. |
 
 ## Supported agents
 
-| Agent | Status |
-|---|---|
-| [Claude Code](https://docs.claude.com/en/docs/claude-code) | ✅ Supported (default) |
-| [GitHub Copilot CLI](https://docs.github.com/en/copilot) | ✅ Supported |
-| OpenAI Codex CLI | 🗺️ Roadmap |
-| OpenCode | 🗺️ Roadmap |
-| Custom / user-defined agents | 🗺️ Roadmap |
+| Agent | CLI | Status |
+|---|---|---|
+| [Claude Code](https://docs.claude.com/en/docs/claude-code) | `claude` | ✅ Supported (default) |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot) | `copilot` | ✅ Supported |
+| [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | `codex` | ✅ Supported |
+| [OpenCode](https://opencode.ai/docs/) | `opencode` | ✅ Supported |
+| Custom / user-defined agents | | 🗺️ Roadmap |
 
 ## Requirements
 
@@ -96,13 +96,13 @@ a broken terminal.
 
 CLI Agent Dock is meant to be a *hub* for many coding agents. Planned:
 
-- Additional agents: OpenAI Codex CLI, OpenCode, and others.
 - Per-agent configuration (model, flags, environment variables).
 - User-defined custom agents.
-- Quick actions (restart agent, new session, open agent docs).
+- Relaunching the running session when you change the agent in Settings.
+- Quick actions (open agent docs, etc.).
 
-> The current release focuses on getting Claude Code and GitHub Copilot CLI working
-> end-to-end, with the architecture already generalized so new agents are easy to add.
+> Four agents work end-to-end today, and the architecture is generalized enough that
+> adding the next one is a registry entry rather than new plumbing.
 
 ## Development
 

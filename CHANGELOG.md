@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Two more agents: OpenAI Codex CLI and OpenCode** — both now appear in the agent picker and in Settings > Tools > CLI Agent Dock, launch in the embedded terminal like Claude Code and GitHub Copilot CLI, and come with their own icon and startup spinner. Nothing to configure: install the CLI (`codex` or `opencode`) and pick it from the dropdown.
+- The agent CLI is now also found when it was installed by OpenCode's install script (`~/bin`, `~/.opencode/bin`), Codex's Windows installer (`%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`), `bun install -g`, Scoop, Chocolatey, or Linux Homebrew — so a stale IDE `PATH` is less likely to produce a false "could not be found".
+
 ## [0.4.0] - 2026-07-14
 
 ### Added

@@ -58,12 +58,20 @@ object AgentExecutableResolver {
 
     private fun candidateDirs(): List<File> {
         val home = File(System.getProperty("user.home"))
-        return if (SystemInfo.isWindows) {
-            buildList {
-                add(File(home, ".local/bin"))
+        return buildList {
+            // Dirs the agents' own install scripts target on every OS. They write
+            // POSIX-style paths under $HOME, so they show up on Windows too whenever the
+            // script was run from Git Bash or WSL.
+            add(File(home, ".local/bin"))       // Claude Code; Codex (install.sh)
+            add(File(home, "bin"))              // OpenCode's first choice
+            add(File(home, ".opencode/bin"))    // OpenCode's fallback
+            add(File(home, ".bun/bin"))         // `bun install -g`
+            if (SystemInfo.isWindows) {
                 System.getenv("APPDATA")?.let { add(File(it, "npm")) }
                 System.getenv("LOCALAPPDATA")?.let { localAppData ->
                     add(File(localAppData, "Programs"))
+                    // Codex's Windows installer (install.ps1).
+                    add(File(localAppData, "Programs\\OpenAI\\Codex\\bin"))
                     // WinGet installs: the Links shim dir, plus each portable package's
                     // own directory. Tools like GitHub Copilot CLI drop copilot.exe
                     // straight into Packages\<id>\ and add that dir (not Links) to PATH,
@@ -74,15 +82,14 @@ object AgentExecutableResolver {
                         ?.filter { it.isDirectory }
                         ?.let { addAll(it) }
                 }
+                add(File(home, "scoop\\shims"))
+                System.getenv("ProgramData")?.let { add(File(it, "chocolatey\\bin")) }
+            } else {
+                add(File("/usr/local/bin"))
+                add(File("/opt/homebrew/bin"))
+                add(File("/home/linuxbrew/.linuxbrew/bin"))
+                add(File(home, ".npm-global/bin"))
             }
-        } else {
-            listOf(
-                File(home, ".local/bin"),
-                File("/usr/local/bin"),
-                File("/opt/homebrew/bin"),
-                File(home, ".npm-global/bin"),
-                File(home, "bin"),
-            )
         }
     }
 }

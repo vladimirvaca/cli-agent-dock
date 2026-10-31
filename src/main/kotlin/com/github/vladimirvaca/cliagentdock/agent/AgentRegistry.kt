@@ -1,9 +1,9 @@
 package com.github.vladimirvaca.cliagentdock.agent
 
 /**
- * Central catalog of known agents. Claude Code is the default and only enabled
- * entry for the current milestone; the rest are stubs so adding an agent later is
- * data, not new plumbing.
+ * Central catalog of known agents. Claude Code is the default; every other entry is
+ * plain data, which is the whole point — adding an agent is a line here plus an icon,
+ * never new plumbing. See AGENTS.md §4.3 for the `readyMarkers` contract.
  */
 object AgentRegistry {
 
@@ -30,8 +30,33 @@ object AgentRegistry {
             // if a release changes them. See the "readiness" pattern in AGENTS.md §4.3.
             readyMarkers = listOf("GitHub Copilot", "/help", "/login"),
         ),
-        Agent(id = "openai-codex", displayName = "OpenAI Codex CLI", command = "codex", enabled = false),
-        Agent(id = "opencode", displayName = "OpenCode", command = "opencode", enabled = false),
+        Agent(
+            id = "openai-codex",
+            displayName = "OpenAI Codex CLI",
+            // `codex`, installed by the standalone installers (chatgpt.com/codex/install.sh
+            // and install.ps1), `npm i -g @openai/codex`, or `brew install --cask codex`.
+            // AgentExecutableResolver probes each of those bin dirs — notably the Windows
+            // installer's %LOCALAPPDATA%\Programs\OpenAI\Codex\bin.
+            command = "codex",
+            // The TUI's banner line, composer placeholder and footer hint, all painted in
+            // the same first frame (verified against the tui startup snapshots in
+            // openai/codex). None is contained in the launch command echo, which is an
+            // absolute path ending in codex/codex.exe.
+            readyMarkers = listOf(">_ OpenAI Codex", "Ask Codex to do anything", "? for shortcuts"),
+        ),
+        Agent(
+            id = "opencode",
+            displayName = "OpenCode",
+            // `opencode`, installed by https://opencode.ai/install (→ $HOME/bin, falling back
+            // to ~/.opencode/bin), npm/bun/pnpm global, Homebrew, Scoop or Chocolatey.
+            command = "opencode",
+            // The composer placeholder, which differs between majors: OpenCode 2 prints
+            // "Ask anything, / for commands, @ for context…" while 1.x prints
+            // `Ask anything... "<rotating example>"`. "Ask anything" is the shared prefix,
+            // so it covers both; the ellipsis is dropped because the TUI swaps "…" for "..."
+            // in mono mode.
+            readyMarkers = listOf("Ask anything", "/ for commands"),
+        ),
     )
 
     /** Agents the user can currently select. */

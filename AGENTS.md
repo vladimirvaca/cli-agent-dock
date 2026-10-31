@@ -17,17 +17,17 @@ terminal already running a **coding agent CLI**.
   **remembered** across restarts and projects.
 - **Multiplatform:** must work on **Windows, macOS, and Linux**.
 
-The long-term vision is a *hub* for many agents (Claude Code, GitHub Copilot CLI,
-OpenAI Codex CLI, OpenCode, etc.). Claude Code and GitHub Copilot CLI already work
-end-to-end; the architecture is generalized so a new agent is a registry entry, not
-new plumbing. Beyond launching the CLI, the plugin adds IDE-side value around it —
-today, a live per-session **Files changed** panel with one-click diffs (§4.5).
+The long-term vision is a *hub* for many agents. Claude Code, GitHub Copilot CLI,
+OpenAI Codex CLI and OpenCode all work end-to-end; the architecture is generalized so a
+new agent is a registry entry, not new plumbing. Beyond launching the CLI, the plugin
+adds IDE-side value around it — today, a live per-session **Files changed** panel with
+one-click diffs (§4.5).
 
 ---
 
 ## 2. Current status
 
-**v0.2.0 is released** (2026-07-11) and the plugin is published on the
+**v0.4.0 is released** (2026-07-14) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -41,10 +41,19 @@ What's shipped, in order of arrival:
   in picker and tabs, standard empty-state screens), and **performance work** (cached
   executable lookups, one shared VFS refresh across sessions, hover repaints limited
   to affected rows). The toolbar IDE-version label was removed.
+- **v0.3.0** — Files changed panel refinements: entries clean themselves up once the VCS
+  reports them clean again, an `· untracked` tag for files VCS doesn't know yet, calmer
+  (non-hover-highlighting) rows, no stale entries from changes made while the IDE was
+  closed, and a fix for freshly opened tabs closing themselves.
+- **v0.4.0** — **Esc reaches the agent** instead of moving focus to the editor, with a
+  double-Esc escape hatch (`terminal/TerminalEscapeRouter.kt`), a settings gear in the
+  toolbar plus a toggle for the Files changed panel, off-EDT executable resolution, and a
+  file refresh that pauses while the IDE window is in the background.
 
-**Current focus:** the "Later" items in §7 — more agents as registry entries, live
-relaunch on settings change, per-agent config. See §4 for the actual layout and §7
-for the full done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
+**Current focus:** the "Later" items in §7 — live relaunch on settings change and
+per-agent config. The agent catalog is now four entries deep (Claude Code, GitHub
+Copilot CLI, OpenAI Codex CLI, OpenCode). See §4 for the actual layout and §7 for the
+full done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
 
 ---
 
@@ -106,8 +115,9 @@ agent/
   Agent.kt                       Model: id, displayName, command, args, enabled,
                                  readyMarkers, readyTimeoutMs. Builds the launch command
                                  line (absolute path, quoted if needed).
-  AgentRegistry.kt               Known agents; Claude Code is the enabled default, others
-                                 stubbed disabled.
+  AgentRegistry.kt               Known agents (Claude Code — the default — GitHub Copilot
+                                 CLI, OpenAI Codex CLI, OpenCode), all enabled. Entries
+                                 carry a per-agent install-location and readyMarkers note.
   AgentExecutableResolver.kt     Resolves the executable via PATH + well-known install dirs.
                                  Successful lookups are cached (one stat on a hit); misses
                                  stay uncached so Retry performs a real lookup.
@@ -180,6 +190,17 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   - Claude Code: `"? for shortcuts"`, `"Welcome to Claude Code"`.
   - GitHub Copilot CLI: `"GitHub Copilot"`, `"/help"`, `"/login"` (spaced "GitHub
     Copilot" is safe because the launch path contains the dotted `GitHub.Copilot`).
+  - OpenAI Codex CLI: `">_ OpenAI Codex"`, `"Ask Codex to do anything"`,
+    `"? for shortcuts"` — the banner, composer placeholder and footer hint of the first
+    painted frame (taken from the TUI startup snapshots in `openai/codex`).
+  - OpenCode: `"Ask anything"`, `"/ for commands"`. The composer placeholder differs
+    between majors — `"Ask anything, / for commands, @ for context…"` on OpenCode 2 vs
+    `Ask anything... "<rotating example>"` on 1.x — so the marker is the shared prefix,
+    with the ellipsis left out because the TUI renders `"..."` instead of `"…"` in mono
+    mode.
+- Three tests in `CliAgentDockTest` guard the contract for a new entry: agent ids are
+  unique, every enabled agent has markers at all, and no marker occurs in its own launch
+  command (checked against the bare command name, the tail of the real absolute path).
 
 ### 4.4 Auto-close the tab when the agent exits
 - Goal: when the agent CLI ends (Ctrl+C-and-quit, EOF, its own `/exit`/`q`, or a crash),
@@ -238,11 +259,22 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - Do **not** hardcode `/bin/bash`, `cmd.exe`, or absolute shell paths. The Terminal
   plugin picks the user's default shell; we only send the agent command to it.
 - Executable resolution (`AgentExecutableResolver`): try `PathEnvironmentVariableUtil.findInPath`
-  first, then well-known install dirs (`~/.local/bin`, npm global, Homebrew, and on Windows
-  the WinGet `Links` shim dir + each `WinGet\Packages\<id>\` portable-package dir),
-  honoring Windows `.exe`/`.cmd`/`.bat`. **Launch by absolute path** so a stale/minimal
-  IDE PATH (common with `runIde` sandboxes and GUI-launched IDEs) doesn't cause a false
-  "not found" or a broken terminal. If unresolved, show the friendly not-found panel.
+  first, then well-known install dirs, honoring Windows `.exe`/`.cmd`/`.bat`. The list is
+  driven by where the agents' own installers write:
+  - every OS — `~/.local/bin` (Claude Code, Codex `install.sh`), `~/bin` and
+    `~/.opencode/bin` (the OpenCode install script's first choice and its fallback),
+    `~/.bun/bin` (`bun install -g`). These are checked on Windows too, since the scripts
+    write POSIX-style `$HOME` paths when run from Git Bash or WSL.
+  - Windows — `%APPDATA%\npm`, `%LOCALAPPDATA%\Programs`,
+    `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (Codex `install.ps1`), the WinGet `Links`
+    shim dir + each `WinGet\Packages\<id>\` portable-package dir, `~\scoop\shims`,
+    `%ProgramData%\chocolatey\bin`.
+  - macOS/Linux — `/usr/local/bin`, `/opt/homebrew/bin`,
+    `/home/linuxbrew/.linuxbrew/bin`, `~/.npm-global/bin`.
+
+  **Launch by absolute path** so a stale/minimal IDE PATH (common with `runIde` sandboxes
+  and GUI-launched IDEs) doesn't cause a false "not found" or a broken terminal. If
+  unresolved, show the friendly not-found panel.
 - Use `com.intellij.openapi.util.SystemInfo` for OS branching.
 
 ### 4.7 Persisting the preferred agent
@@ -282,9 +314,14 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   `src/main/resources/icons/` (`cliAgentDock.svg` + `_dark`), referenced by the `icon`
   attribute of the `<toolWindow>` element. The purple branding lives only in the
   Marketplace/Settings plugin icon (`META-INF/pluginIcon.svg` + `_dark`).
-- Per-agent icons: `16x16` SVGs under `icons/agents/` (`claudeCode.svg`,
-  `githubCopilot.svg` + `_dark`), loaded through `AgentIcons` (§4). A new agent without
-  art falls back to a generic console icon.
+- Per-agent icons: `16x16` SVGs under `icons/agents/` (`claudeCode.svg`, plus
+  `githubCopilot.svg`, `openaiCodex.svg` and `opencode.svg` with `_dark` variants),
+  loaded through `AgentIcons` (§4). A new agent without art falls back to a generic
+  console icon. The monochrome ones use the platform's neutral strokes — `#6C707E`
+  light, `#CED0D6` dark; only Claude Code carries a brand color. `AgentIcons.resourcePaths`
+  is `internal` so `CliAgentDockTest` can assert every enabled agent's light and dark
+  resources actually exist — a typo'd path would otherwise only show up as a blank icon
+  at runtime.
 - Keep light/dark variants (`*_dark.svg`) per JetBrains UI guidelines.
 
 ---
@@ -318,8 +355,12 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - [x] Performance: cached executable lookups (Retry still real), one shared VFS refresh
       across sessions, row-scoped hover repaints.
 
+**Done since v0.4.0 (unreleased):**
+- [x] OpenAI Codex CLI and OpenCode as enabled `AgentRegistry` entries, each with
+      readiness markers (§4.3), an icon, and its installers' bin dirs in the resolver
+      (§4.6).
+
 **Later:**
-- Additional agents (Codex CLI, OpenCode, …) as `AgentRegistry` entries.
 - Live relaunch when the preferred agent changes in Settings.
 - Per-agent config (model, flags, env), custom/user-defined agents.
 - Quick actions (open docs, etc.).

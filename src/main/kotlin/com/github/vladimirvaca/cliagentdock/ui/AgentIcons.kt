@@ -12,13 +12,22 @@ import javax.swing.Icon
  */
 object AgentIcons {
 
-    private val claudeCode = IconLoader.getIcon("/icons/agents/claudeCode.svg", AgentIcons::class.java)
-    private val githubCopilot = IconLoader.getIcon("/icons/agents/githubCopilot.svg", AgentIcons::class.java)
+    /**
+     * Art for each agent. `IconLoader` picks up the `_dark` sibling of every path on its
+     * own, so only the light variant is named here. Visible to tests, which assert every
+     * path actually resolves — a typo would otherwise only surface as a missing icon at
+     * runtime.
+     */
+    internal val resourcePaths: Map<String, String> = mapOf(
+        "claude-code" to "/icons/agents/claudeCode.svg",
+        "github-copilot" to "/icons/agents/githubCopilot.svg",
+        "openai-codex" to "/icons/agents/openaiCodex.svg",
+        "opencode" to "/icons/agents/opencode.svg",
+    )
+
+    private val icons: Map<String, Icon> =
+        resourcePaths.mapValues { (_, path) -> IconLoader.getIcon(path, AgentIcons::class.java) }
 
     /** Agents without dedicated art fall back to a generic console icon. */
-    fun forAgent(agent: Agent): Icon = when (agent.id) {
-        "claude-code" -> claudeCode
-        "github-copilot" -> githubCopilot
-        else -> AllIcons.Debugger.Console
-    }
+    fun forAgent(agent: Agent): Icon = icons[agent.id] ?: AllIcons.Debugger.Console
 }
