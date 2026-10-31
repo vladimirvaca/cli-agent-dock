@@ -1,8 +1,10 @@
 package com.github.vladimirvaca.cliagentdock
 
+import com.github.vladimirvaca.cliagentdock.agent.AgentExecutableResolver
 import com.github.vladimirvaca.cliagentdock.agent.AgentRegistry
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.ui.AgentIcons
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class CliAgentDockTest : BasePlatformTestCase() {
@@ -63,6 +65,19 @@ class CliAgentDockTest : BasePlatformTestCase() {
                 // monochrome ones need the dark sibling IconLoader looks for.
                 assertNotNull("dark variant $dark is missing", AgentIcons::class.java.getResource(dark))
             }
+        }
+    }
+
+    fun testWindowsExecutableLookupPrefersRunnableExtensions() {
+        // Regression guard: the bare name last. findInPath matches literally rather than
+        // applying PATHEXT, so asking for it first returns npm's extensionless POSIX
+        // script instead of its .cmd — and PowerShell ShellExecutes that into a separate
+        // window rather than running the agent inside the terminal widget.
+        val names = AgentExecutableResolver.executableNames("opencode")
+        if (SystemInfo.isWindows) {
+            assertEquals(listOf("opencode.exe", "opencode.cmd", "opencode.bat", "opencode"), names)
+        } else {
+            assertEquals(listOf("opencode"), names)
         }
     }
 

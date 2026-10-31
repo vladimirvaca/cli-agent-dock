@@ -36,8 +36,10 @@ object AgentExecutableResolver {
     }
 
     private fun doResolve(agent: Agent): File? {
-        // 1. Standard PATH lookup (honors PATHEXT / .exe/.cmd/.bat on Windows).
-        PathEnvironmentVariableUtil.findInPath(agent.command)?.let { return it }
+        // 1. PATH lookup, asking for each executable form in turn.
+        for (name in executableNames(agent.command)) {
+            PathEnvironmentVariableUtil.findInPath(name)?.let { return it }
+        }
 
         // 2. Well-known install locations not always present on the IDE's PATH.
         for (dir in candidateDirs()) {
@@ -49,7 +51,20 @@ object AgentExecutableResolver {
         return null
     }
 
-    private fun executableNames(command: String): List<String> =
+    /**
+     * Forms of [command] to look for, most reliably executable first.
+     *
+     * On Windows the bare name must come **last**, and asking for it is not the same as
+     * asking for the extensions: `findInPath` does *not* apply `PATHEXT`, it matches the
+     * literal name. npm-style installs ship an extensionless POSIX script next to their
+     * `.cmd` (`…\nodejs\opencode` beside `opencode.cmd`), so a bare lookup returns the
+     * script — which PowerShell cannot run in place. It treats it as a document and hands
+     * it to ShellExecute, which opens a separate window while the embedded terminal exits
+     * on the spot. Preferring `.exe`/`.cmd`/`.bat` keeps the agent inside the widget under
+     * every shell; the bare name still trails as a last resort for POSIX shells like Git
+     * Bash, which can run such a script.
+     */
+    internal fun executableNames(command: String): List<String> =
         if (SystemInfo.isWindows) {
             listOf("$command.exe", "$command.cmd", "$command.bat", command)
         } else {

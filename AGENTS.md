@@ -197,7 +197,11 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
     between majors — `"Ask anything, / for commands, @ for context…"` on OpenCode 2 vs
     `Ask anything... "<rotating example>"` on 1.x — so the marker is the shared prefix,
     with the ellipsis left out because the TUI renders `"..."` instead of `"…"` in mono
-    mode.
+    mode. The second marker is 2.x-only and harmless redundancy on 1.x.
+- Markers can be sanity-checked against an installed CLI by grepping its binary
+  (`grep -a -F "<marker>" codex.exe`), but **absence there does not mean absence on
+  screen**: TUIs compose footers from separate styled spans, so Codex's
+  `"? for shortcuts"` renders fine while the binary only contains `" for shortcuts"`.
 - Three tests in `CliAgentDockTest` guard the contract for a new entry: agent ids are
   unique, every enabled agent has markers at all, and no marker occurs in its own launch
   command (checked against the bare command name, the tail of the real absolute path).
@@ -259,8 +263,16 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - Do **not** hardcode `/bin/bash`, `cmd.exe`, or absolute shell paths. The Terminal
   plugin picks the user's default shell; we only send the agent command to it.
 - Executable resolution (`AgentExecutableResolver`): try `PathEnvironmentVariableUtil.findInPath`
-  first, then well-known install dirs, honoring Windows `.exe`/`.cmd`/`.bat`. The list is
-  driven by where the agents' own installers write:
+  first, then well-known install dirs. **`findInPath` does not apply `PATHEXT`** — it
+  matches the name you hand it, literally — so both stages ask for
+  `<cmd>.exe`, `<cmd>.cmd`, `<cmd>.bat` and only then the bare `<cmd>`
+  (`executableNames`). Getting that order wrong is not cosmetic: npm-style installs put
+  an extensionless POSIX script beside their `.cmd` (`…\nodejs\opencode`), a bare lookup
+  returns the script, and PowerShell cannot run a script with no known extension in
+  place — it ShellExecutes it, so the agent appears in a **separate window** while the
+  embedded terminal exits immediately. The bare name stays last for POSIX shells like
+  Git Bash, which can run it. The dir list is driven by where the agents' own installers
+  write:
   - every OS — `~/.local/bin` (Claude Code, Codex `install.sh`), `~/bin` and
     `~/.opencode/bin` (the OpenCode install script's first choice and its fallback),
     `~/.bun/bin` (`bun install -g`). These are checked on Windows too, since the scripts

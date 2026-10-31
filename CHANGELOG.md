@@ -9,6 +9,10 @@
 - **Two more agents: OpenAI Codex CLI and OpenCode** — both now appear in the agent picker and in Settings > Tools > CLI Agent Dock, launch in the embedded terminal like Claude Code and GitHub Copilot CLI, and come with their own icon and startup spinner. Nothing to configure: install the CLI (`codex` or `opencode`) and pick it from the dropdown.
 - The agent CLI is now also found when it was installed by OpenCode's install script (`~/bin`, `~/.opencode/bin`), Codex's Windows installer (`%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`), `bun install -g`, Scoop, Chocolatey, or Linux Homebrew — so a stale IDE `PATH` is less likely to produce a false "could not be found".
 
+### Fixed
+
+- **An agent installed through npm no longer opens in a separate console window on Windows.** Such installs place an extensionless POSIX script next to the `.cmd` the shell actually needs, and the plugin picked the script — which PowerShell can only hand to ShellExecute, so the agent appeared in its own window while the dock's terminal closed instantly. Windows lookups now prefer `.exe`/`.cmd`/`.bat` over the bare name, keeping the agent inside the tool window. This also affects GitHub Copilot CLI, which now resolves to its real executable instead of a shim.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added

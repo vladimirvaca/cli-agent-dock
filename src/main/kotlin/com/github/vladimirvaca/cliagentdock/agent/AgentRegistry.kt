@@ -39,9 +39,11 @@ object AgentRegistry {
             // installer's %LOCALAPPDATA%\Programs\OpenAI\Codex\bin.
             command = "codex",
             // The TUI's banner line, composer placeholder and footer hint, all painted in
-            // the same first frame (verified against the tui startup snapshots in
-            // openai/codex). None is contained in the launch command echo, which is an
-            // absolute path ending in codex/codex.exe.
+            // the same first frame. The first two are literal strings in the shipped
+            // binary (checked against codex-cli 0.166.0); the third is only ever a
+            // rendered string — the footer pushes "?" and " for shortcuts" as separate
+            // styled spans — so it matches the screen but not the executable. None is
+            // contained in the launch command echo, an absolute path ending in codex.exe.
             readyMarkers = listOf(">_ OpenAI Codex", "Ask Codex to do anything", "? for shortcuts"),
         ),
         Agent(
@@ -53,8 +55,9 @@ object AgentRegistry {
             // The composer placeholder, which differs between majors: OpenCode 2 prints
             // "Ask anything, / for commands, @ for context…" while 1.x prints
             // `Ask anything... "<rotating example>"`. "Ask anything" is the shared prefix,
-            // so it covers both; the ellipsis is dropped because the TUI swaps "…" for "..."
-            // in mono mode.
+            // so it covers both (confirmed present in a 1.19.5 install); the ellipsis is
+            // dropped because the TUI swaps "…" for "..." in mono mode. The second marker
+            // only exists on 2.x and is harmless redundancy on 1.x.
             readyMarkers = listOf("Ask anything", "/ for commands"),
         ),
     )
