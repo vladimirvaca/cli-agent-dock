@@ -94,12 +94,22 @@ a broken terminal.
 
 ## Roadmap
 
-CLI Agent Dock is meant to be a *hub* for many coding agents. Planned:
+CLI Agent Dock is meant to be a *hub* for many coding agents, and to make running one
+inside the IDE genuinely better than running it in a terminal tab.
 
-- Per-agent configuration (model, flags, environment variables).
-- User-defined custom agents.
-- Relaunching the running session when you change the agent in Settings.
-- Quick actions (open agent docs, etc.).
+**Next up — the "IDE context" release:**
+
+- **Send editor context to the agent** — a shortcut and context-menu action that drops
+  the current file and line range (or your selection) straight into the running agent,
+  ready for you to type the instruction.
+- **Keyboard-first** — New Session, Restart and focusing the dock as real IDE actions you
+  can find in Find Action and bind to your own shortcuts.
+- **Attention when it's needed** — a cue in the IDE when an agent is waiting on you,
+  instead of discovering it minutes later.
+
+**Also planned:** per-agent configuration (model, flags, environment variables),
+user-defined custom agents, a per-project agent override, relaunching on an agent change
+in Settings, and session restore across restarts.
 
 > Four agents work end-to-end today, and the architecture is generalized enough that
 > adding the next one is a registry entry rather than new plumbing.

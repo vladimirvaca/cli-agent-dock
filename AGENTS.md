@@ -27,7 +27,7 @@ one-click diffs (§4.5).
 
 ## 2. Current status
 
-**v0.4.0 is released** (2026-07-14) and the plugin is published on the
+**v0.5.0 is released** (2026-10-31) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -49,11 +49,17 @@ What's shipped, in order of arrival:
   double-Esc escape hatch (`terminal/TerminalEscapeRouter.kt`), a settings gear in the
   toolbar plus a toggle for the Files changed panel, off-EDT executable resolution, and a
   file refresh that pauses while the IDE window is in the background.
+- **v0.5.0** — **two more agents**, OpenAI Codex CLI and OpenCode, each a plain registry
+  entry with readiness markers and an icon, plus the installer bin dirs they actually use;
+  and a Windows fix so an npm-installed agent runs inside the widget rather than opening
+  a separate console window.
 
-**Current focus:** the "Later" items in §7 — live relaunch on settings change and
-per-agent config. The agent catalog is now four entries deep (Claude Code, GitHub
-Copilot CLI, OpenAI Codex CLI, OpenCode). See §4 for the actual layout and §7 for the
-full done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
+**Current focus: v0.6.0, the "IDE context" milestone** (§7) — registered actions, sending
+editor context to the running agent, and surfacing when an agent wants attention. The
+agent catalog is four entries deep (Claude Code, GitHub Copilot CLI, OpenAI Codex CLI,
+OpenCode) and broadening it further is explicitly *not* the current priority. See §4 for
+the actual layout and §7 for the full done-vs-next ledger; `CHANGELOG.md` is the
+authoritative release record.
 
 ---
 
@@ -367,16 +373,55 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - [x] Performance: cached executable lookups (Retry still real), one shared VFS refresh
       across sessions, row-scoped hover repaints.
 
-**Done since v0.4.0 (unreleased):**
+**Done in v0.5.0 (2026-10-31):**
 - [x] OpenAI Codex CLI and OpenCode as enabled `AgentRegistry` entries, each with
       readiness markers (§4.3), an icon, and its installers' bin dirs in the resolver
-      (§4.6).
+      (§4.6). Both verified end-to-end on Windows.
+- [x] Windows PATH lookups prefer `.exe`/`.cmd`/`.bat` over the bare name, so an
+      npm-installed agent runs inside the widget instead of being ShellExecuted into a
+      separate console window (§4.6). Also redirects Copilot to its real executable.
+
+**Next — v0.6.0, the "IDE context" milestone.** The plugin's edge over a plain terminal
+tab is context flowing *in* from the IDE and agent state flowing *back out*; today
+neither happens (nothing reads the editor, and `plugin.xml` registers no actions at all).
+In rough dependency order:
+- [ ] **Register real actions in `plugin.xml`.** New Session, Restart and a new
+      Focus/Toggle Dock are currently anonymous `AnAction` subclasses built inside
+      `CliAgentDockToolWindowPanel`, so they are absent from the keymap, Find Action and
+      Search Everywhere, and cannot be bound to a shortcut. Give them ids and default
+      keymap entries. Prerequisite for the next item being bindable.
+- [ ] **Send editor context to the active session.** Editor context-menu action plus
+      shortcut that injects a file reference (`@path/to/File.kt:120-145`) or the current
+      selection into the agent's input *without* submitting, so the user types the
+      instruction after. All four agents understand file references, so keep this
+      cross-agent — no per-agent branches.
+      *Unknown to settle first:* `sendCommandToExecute` submits the line, so this needs a
+      plain-write path into the widget. Verify what 2025.2's `TerminalWidget` actually
+      exposes before designing around it — probe it the way `isCommandRunning` was
+      (§4.2), don't trust the interface.
+- [ ] **Surface when an agent wants attention.** Agents block on approval prompts; with
+      the dock collapsed or the IDE backgrounded that goes unnoticed. Badge the tool
+      window stripe or post a `Notification` when a session goes idle after output, or on
+      the terminal bell. Reuse the existing `getText()` `Alarm` poll in
+      `AgentTerminalView` rather than adding a second timer (§5, "mind the hot paths").
 
 **Later:**
-- Live relaunch when the preferred agent changes in Settings.
-- Per-agent config (model, flags, env), custom/user-defined agents.
-- Quick actions (open docs, etc.).
-- README screenshot/GIF of the tool window in action (still a TODO in README.md).
+- Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
+  entry uses it yet, so this is mostly a settings UI.
+- Custom/user-defined agents; more built-ins (Gemini CLI, Cursor CLI, Amp, Aider).
+- Per-project preferred-agent override, falling back to the application-level setting.
+- Live relaunch when the preferred agent changes in Settings (the `AgentSettingsListener`
+  topic added in v0.4.0 already provides the publish point).
+- Session restore across restarts, ideally paired with each agent's own
+  `--continue`/`--resume`; renameable or branch-labelled tabs.
+- Files changed panel: revert/stage a file, `+/-` line counts.
+- Per-agent install-docs link in the not-found panel (today it is a dead end).
+- README screenshot/GIF of the tool window in action (still a TODO in README.md) —
+  probably the highest-leverage change for Marketplace conversion.
+
+**Deliberately not planned:** per-agent deep integrations (e.g. MCP bridges). Claude Code
+and Copilot ship official JetBrains plugins and will always win on single-vendor depth;
+this plugin's advantage is being cross-agent, so features should stay agent-agnostic.
 
 ---
 
