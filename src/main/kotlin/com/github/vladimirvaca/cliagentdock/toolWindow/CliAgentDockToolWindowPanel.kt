@@ -8,17 +8,15 @@ import com.github.vladimirvaca.cliagentdock.changes.SessionFileChangeTracker
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsListener
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
+import com.github.vladimirvaca.cliagentdock.terminal.AgentAttentionWatcher
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
 import com.github.vladimirvaca.cliagentdock.ui.AgentIcons
 import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
 import com.github.vladimirvaca.cliagentdock.util.IdeInfo
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.colors.EditorColorsManager
@@ -66,6 +64,14 @@ class CliAgentDockToolWindowPanel(
 
         private const val CARD_SESSIONS = "sessions"
         private const val CARD_EMPTY = "empty"
+
+        /** Action group ids declared in plugin.xml. */
+        private const val GROUP_TOOLBAR = "CliAgentDock.Toolbar"
+        private const val GROUP_SETTINGS = "CliAgentDock.SettingsToolbar"
+
+        /** ActionPlaces for the two toolbars, used for action-system diagnostics. */
+        private const val PLACE_TOOLBAR = "CliAgentDockToolbar"
+        private const val PLACE_SETTINGS_TOOLBAR = "CliAgentDockSettingsToolbar"
     }
 
     private val settings = AgentSettingsState.getInstance()
@@ -90,10 +96,14 @@ class CliAgentDockToolWindowPanel(
             (agentCombo.selectedItem as? Agent)?.let { settings.preferredAgentId = it.id }
         }
 
+        AgentDockService.getInstance(project).attach(this, parentDisposable)
+
         // Icon actions (native tool-window style) instead of text buttons; the labels
-        // move into the tooltips supplied by the actions' text/description.
+        // move into the tooltips supplied by the actions' text/description. The groups
+        // come from plugin.xml so each action has a single definition that is also
+        // reachable from Find Action and bindable in the keymap.
         val actionToolbar = ActionManager.getInstance()
-            .createActionToolbar("CliAgentDockToolbar", DefaultActionGroup(NewSessionAction(), RestartAction()), true)
+            .createActionToolbar(PLACE_TOOLBAR, actionGroup(GROUP_TOOLBAR), true)
         actionToolbar.targetComponent = this
 
         val controls = JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(6))).apply {
@@ -108,7 +118,7 @@ class CliAgentDockToolWindowPanel(
         // configures the plugin rather than the current session, and the separation
         // keeps it visible without competing with the actions used constantly.
         val settingsToolbar = ActionManager.getInstance()
-            .createActionToolbar("CliAgentDockSettingsToolbar", DefaultActionGroup(SettingsAction()), true)
+            .createActionToolbar(PLACE_SETTINGS_TOOLBAR, actionGroup(GROUP_SETTINGS), true)
         settingsToolbar.targetComponent = this
 
         toolbar = BorderLayoutPanel().apply {
@@ -130,38 +140,42 @@ class CliAgentDockToolWindowPanel(
         (contentCards.layout as CardLayout).show(contentCards, card)
     }
 
-    private inner class NewSessionAction : AnAction(
-        CliAgentDockBundle["action.newSession.text"],
-        CliAgentDockBundle["action.newSession.description"],
-        AllIcons.General.Add,
-    ), DumbAware {
-        override fun actionPerformed(e: AnActionEvent) = openSession(selectedAgent())
+    /**
+     * Looks up a group declared in plugin.xml. A missing or mistyped id would otherwise
+     * surface as a silently empty toolbar, so fail loudly instead.
+     */
+    private fun actionGroup(id: String): ActionGroup =
+        requireNotNull(ActionManager.getInstance().getAction(id) as? ActionGroup) {
+            "Action group '$id' is not registered as a group in plugin.xml"
+        }
+
+    // ---- API used by the registered actions, via AgentDockService ----
+
+    /** Opens a session for the agent currently chosen in the picker. */
+    fun openPreferredSession() = openSession(selectedAgent())
+
+    fun hasActiveSession(): Boolean = currentSession() != null
+
+    fun restartActiveSession() {
+        currentSession()?.restart()
     }
 
-    private inner class RestartAction : AnAction(
-        CliAgentDockBundle["action.restart.text"],
-        CliAgentDockBundle["action.restart.description"],
-        AllIcons.Actions.Restart,
-    ), DumbAware {
-        override fun actionPerformed(e: AnActionEvent) {
-            currentSession()?.restart()
-        }
-
-        override fun update(e: AnActionEvent) {
-            e.presentation.isEnabled = currentSession() != null
-        }
-
-        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    /** Moves focus into the selected session's terminal, if there is one. */
+    fun focusActiveSession() {
+        currentSession()?.focusTerminal()
     }
 
-    private inner class SettingsAction : AnAction(
-        CliAgentDockBundle["action.settings.text"],
-        CliAgentDockBundle["action.settings.description"],
-        AllIcons.General.Settings,
-    ), DumbAware {
-        override fun actionPerformed(e: AnActionEvent) {
-            ShowSettingsUtil.getInstance().showSettingsDialog(project, AgentSettingsConfigurable::class.java)
+    /**
+     * Types [text] into the selected session's agent without submitting it, opening a
+     * session first when none is running so the editor actions work from a cold dock.
+     * The session queues the text when its agent is still starting.
+     */
+    fun sendToActiveSession(text: String) {
+        val session = currentSession() ?: run {
+            openPreferredSession()
+            currentSession()
         }
+        session?.sendInput(text)
     }
 
     private fun selectedAgent(): Agent = agentCombo.selectedItem as? Agent ?: settings.preferredAgent
@@ -261,6 +275,25 @@ class CliAgentDockToolWindowPanel(
             tabs.selectedIndex = index
         }
 
+        /**
+         * Types [text] into this session's agent without submitting. A no-op while the
+         * executable is still being resolved (no view yet) — the only window in which the
+         * dock is open but has nothing to type into.
+         */
+        fun sendInput(text: String) {
+            liveView?.sendInput(text)
+        }
+
+        fun focusTerminal() {
+            liveView?.focusTerminal()
+        }
+
+        /** Brings this session's tab to the front, e.g. from its attention notification. */
+        fun select() {
+            val index = tabs.indexOfTabComponent(header)
+            if (index >= 0) tabs.selectedIndex = index
+        }
+
         fun close() {
             if (closed) return
             closed = true
@@ -313,11 +346,31 @@ class CliAgentDockToolWindowPanel(
         /** The live terminal plus the session's changed-files tracking, wired together. */
         private fun createTerminalContent(sessionDisposable: Disposable, executable: File): JComponent {
             val workingDir = project.basePath ?: System.getProperty("user.home")
+            // "Watching" means the dock is visible *and* this session's tab is the one on
+            // screen: a background tab finishing while the user reads another one is
+            // exactly the case worth announcing.
+            val attention = AgentAttentionWatcher(
+                project = project,
+                sessionTitle = title,
+                isUserWatching = {
+                    AgentDockService.getInstance(project).isDockVisible() && currentSession() === this
+                },
+                onOpenRequested = {
+                    AgentDockService.getInstance(project).withPanel {
+                        select()
+                        focusTerminal()
+                    }
+                },
+            )
             lateinit var view: AgentTerminalView
-            view = AgentTerminalView(project, sessionDisposable, workingDir, agent, executable) {
-                // Only the current view may close the tab; a replaced (restarted) view's exit is stale.
-                if (liveView === view) close()
-            }
+            view = AgentTerminalView(
+                project, sessionDisposable, workingDir, agent, executable,
+                onExit = {
+                    // Only the current view may close the tab; a replaced (restarted) view's exit is stale.
+                    if (liveView === view) close()
+                },
+                attention = attention,
+            )
             liveView = view
 
             // Terminal on top; a "Files changed" panel appears below only once this

@@ -45,6 +45,11 @@ class AgentTerminalView(
      * once and always on the EDT.
      */
     private val onExit: () -> Unit,
+    /**
+     * Watches for the agent going quiet while the user is elsewhere. Driven from this
+     * view's existing poll rather than its own timer; null disables attention entirely.
+     */
+    private val attention: AgentAttentionWatcher? = null,
 ) : JBPanel<AgentTerminalView>(CardLayout()) {
 
     private val cardLayout get() = layout as CardLayout
@@ -63,6 +68,19 @@ class AgentTerminalView(
     private var sawCommandRunning = false
     /** Consecutive not-running polls observed after [sawCommandRunning]; see [checkExit]. */
     private var stoppedPolls = 0
+
+    /** Counts exit polls so the attention check can run on a slower cadence; see [checkExit]. */
+    private var exitPolls = 0
+
+    /** True once the terminal card is showing, i.e. the agent is up and can accept input. */
+    private var revealed = false
+
+    /**
+     * Text handed to [sendInput] before the agent was ready. Writing to the PTY during
+     * shell boot would be swallowed or land in the wrong process, so it is held until
+     * [showTerminal] and flushed there.
+     */
+    private var pendingInput: StringBuilder? = null
 
     init {
         Disposer.register(parentDisposable, spinner)
@@ -114,7 +132,36 @@ class AgentTerminalView(
             notifyExit()
             return
         }
+        // Attention rides this timer instead of adding a second one, but at a fraction of
+        // its rate: unlike isCommandRunning, it needs getText(), which materializes the
+        // whole scrollback — too costly to do twice a second for the life of a session.
+        if (++exitPolls % ATTENTION_EVERY_N_POLLS == 0) {
+            attention?.onCheck(widget.getText())
+        }
         scheduleExitCheck()
+    }
+
+    /**
+     * Types [text] into the running agent **without submitting it**, leaving the user to
+     * add their instruction and press Enter. Queued until the agent is ready if called
+     * during startup, so callers never have to wait for the session themselves.
+     */
+    fun sendInput(text: String) {
+        if (!revealed) {
+            (pendingInput ?: StringBuilder().also { pendingInput = it }).append(text)
+            return
+        }
+        writeToAgent(text)
+    }
+
+    /**
+     * Writes straight to the agent's stdin. `sendCommandToExecute` would append a newline
+     * and run the line, which is the opposite of what the context actions want; the
+     * connector accessor defers until the PTY exists, so no readiness check is needed
+     * beyond the queueing above. See AGENTS.md §4.2.
+     */
+    private fun writeToAgent(text: String) {
+        widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(text) }
     }
 
     private fun notifyExit() {
@@ -145,9 +192,19 @@ class AgentTerminalView(
         Disposer.dispose(spinner)
         cardLayout.show(this, CARD_TERMINAL)
         widget.requestFocus()
+        revealed = true
+        pendingInput?.let {
+            pendingInput = null
+            writeToAgent(it.toString())
+        }
         // Only now is the agent known to be up (marker seen) or long past the shell-boot
         // phase (timeout), so the exit poll can no longer mistake startup for an exit.
         scheduleExitCheck()
+    }
+
+    /** Moves focus into the terminal, e.g. when the dock is activated by shortcut. */
+    fun focusTerminal() {
+        widget.requestFocus()
     }
 
     private fun createLoaderPanel(): JComponent {
@@ -178,6 +235,9 @@ class AgentTerminalView(
         // Consecutive not-running polls (after having seen the command run) required to
         // treat the agent as exited; see checkExit.
         private const val STOPPED_CONFIRM_POLLS = 3
+        // Run the attention check every Nth exit poll (so ~2s apart), keeping getText()
+        // off the twice-a-second path while still noticing a quiet agent promptly.
+        private const val ATTENTION_EVERY_N_POLLS = 4
         private const val CARD_TERMINAL = "terminal"
         private const val CARD_LOADING = "loading"
     }

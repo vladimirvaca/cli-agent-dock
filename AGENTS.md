@@ -54,12 +54,12 @@ What's shipped, in order of arrival:
   and a Windows fix so an npm-installed agent runs inside the widget rather than opening
   a separate console window.
 
-**Current focus: v0.6.0, the "IDE context" milestone** (§7) — registered actions, sending
-editor context to the running agent, and surfacing when an agent wants attention. The
-agent catalog is four entries deep (Claude Code, GitHub Copilot CLI, OpenAI Codex CLI,
-OpenCode) and broadening it further is explicitly *not* the current priority. See §4 for
-the actual layout and §7 for the full done-vs-next ledger; `CHANGELOG.md` is the
-authoritative release record.
+**Current focus:** v0.6.0, the "IDE context" milestone (§4.8, §7), is built — registered
+actions, sending editor context to the running agent, and an attention notification when
+an agent goes quiet unwatched. The agent catalog is four entries deep (Claude Code, GitHub
+Copilot CLI, OpenAI Codex CLI, OpenCode) and broadening it further is explicitly *not* the
+priority; cross-agent IDE integration is. See §4 for the actual layout and §7 for the full
+done-vs-next ledger; `CHANGELOG.md` is the authoritative release record.
 
 ---
 
@@ -96,8 +96,20 @@ plumbing. Actual layout:
 ```
 CliAgentDockBundle.kt                i18n bundle object (messages/CliAgentDockBundle.properties).
 
+actions/
+  AgentDockActions.kt            New Session, Restart, Open Settings and Focus Agent
+                                 Terminal, all registered in plugin.xml (§4.8). Thin
+                                 delegates — the panel is reached via AgentDockService.
+  SendContextAction.kt           Inserts "@path:lines" for the current file/selection into
+                                 the running agent without submitting (§4.8). Holds the
+                                 testable AgentContextReference formatter.
+
 toolWindow/
   CliAgentDockToolWindowFactory.kt   ToolWindowFactory (DumbAware), anchored right.
+  AgentDockService.kt            Project service holding the live tool-window panel, so
+                                 registered actions (constructed argument-less by the
+                                 platform) can reach it. withPanel() opens the tool window
+                                 first when it isn't up (§4.8).
   CliAgentDockToolWindowPanel.kt     SimpleToolWindowPanel: toolbar (agent picker + native
                                  icon actions for New Session and Restart — Restart
                                  disables itself with no open session) + a JBTabbedPane
@@ -137,7 +149,12 @@ ui/
 terminal/
   AgentTerminalRunner.kt         Creates the embedded terminal and sends the agent command.
   AgentTerminalView.kt           CardLayout: loading spinner until the agent is ready,
-                                 then the terminal card.
+                                 then the terminal card. Also owns sendInput() (types into
+                                 the agent without submitting, queued until ready) and
+                                 drives the attention check off its existing poll (§4.8).
+  AgentAttentionWatcher.kt       Notifies when an agent goes quiet while unwatched (§4.8).
+                                 Rules live in the platform-free AttentionDecider so they
+                                 are unit-testable.
 
 settings/
   AgentSettingsState.kt          PersistentStateComponent (APP level, @Service light service —
@@ -309,6 +326,54 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   read/write this same state. (Changing it in Settings takes effect on the next
   open/Restart of the tool window — live relaunch on settings-apply is a future nicety.)
 
+### 4.8 Registered actions and IDE context (v0.6.0)
+The plugin's edge over a plain terminal tab is IDE context flowing *in* and agent state
+flowing *back out*. Three pieces, all deliberately **agent-agnostic** — no per-agent
+branches anywhere in here.
+
+- **Actions live in `plugin.xml`, not in the panel.** They used to be anonymous `AnAction`
+  subclasses built inside `CliAgentDockToolWindowPanel`, which meant they existed nowhere
+  in the keymap, Find Action or Search Everywhere, and could not be bound to a shortcut.
+  Both toolbars are now assembled from the XML groups `CliAgentDock.Toolbar` and
+  `CliAgentDock.SettingsToolbar`, so each action has exactly one definition.
+  `actionGroup()` throws rather than silently rendering an empty toolbar if an id is
+  mistyped. Action text/description still come from the classes (which read the bundle),
+  so strings are not duplicated into XML attributes.
+- **`AgentDockService` (project level) is how actions find the panel.** The platform
+  constructs registered actions with no arguments, so they cannot capture the panel.
+  The panel attaches itself on creation and detaches via its `Disposable` (identity-guarded,
+  so a stale disposal cannot null out a newer panel). Anything invokable from outside the
+  dock must handle the tool window being closed: `withPanel {}` activates it first and runs
+  the body from the activation callback, once the content exists. `RestartSessionAction` is
+  the deliberate exception — it reads `attachedPanel` directly, because an action that is
+  *disabled for lack of a session* must not open the dock as a side effect of `update`.
+- **Default shortcuts were verified, not guessed:** `ctrl alt shift D` (focus) and
+  `ctrl alt shift A` (send context), with `meta alt shift` variants for
+  `Mac OS X 10.5+`. Grepping the bundled keymaps of the target platform showed
+  `ctrl alt shift H` as the *only* bound `ctrl alt shift` combination, and
+  `meta alt shift` only on `R`, `DOWN` and the brackets. Re-check this when bumping the
+  platform rather than assuming it still holds.
+- **Send context sends a reference, not the code.** `@path`, plus `:line` or `:start-end`
+  when there is a selection, and a trailing space so the user can type immediately. Every
+  supported agent can read files itself, so pasting the snippet would duplicate what the
+  agent would fetch anyway and throw away the surrounding file. It is inserted **without a
+  newline** — the action supplies context, the user supplies intent.
+- **Input never goes through `sendCommandToExecute`** (that submits a line). It uses the
+  stdin write from §4.2. `AgentTerminalView.sendInput` queues text while the agent is still
+  starting and flushes it in `showTerminal()`, so invoking send-context against a cold dock
+  works without callers having to wait for readiness themselves.
+- **Attention is a quiet-period heuristic, by design.** Detecting "waiting for approval"
+  exactly would mean parsing each agent's prompt — precisely the per-agent coupling this
+  plugin avoids. Instead it watches the one agent-agnostic signal available: output stopped
+  arriving. It fires at most once per turn, re-arms on new output, and never fires while
+  that session's tab is on screen with the dock visible (so a background tab finishing
+  *is* announced). Gated by the `notifyWhenAgentIdle` setting, read per check so toggling
+  it applies mid-session.
+- **It reuses the existing timer.** The check rides `AgentTerminalView`'s exit poll at
+  every 4th tick (~2s) rather than adding a second `Alarm`: unlike `isCommandRunning`, it
+  needs `getText()`, which materializes the whole scrollback and is too costly to run twice
+  a second for a session's lifetime. Keep it that way (§5, "mind the hot paths").
+
 ---
 
 ## 5. Conventions
@@ -387,32 +452,16 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
       npm-installed agent runs inside the widget instead of being ShellExecuted into a
       separate console window (§4.6). Also redirects Copilot to its real executable.
 
-**Next — v0.6.0, the "IDE context" milestone.** The plugin's edge over a plain terminal
-tab is context flowing *in* from the IDE and agent state flowing *back out*; today
-neither happens (nothing reads the editor, and `plugin.xml` registers no actions at all).
-In rough dependency order:
-- [ ] **Register real actions in `plugin.xml`.** New Session, Restart and a new
-      Focus/Toggle Dock are currently anonymous `AnAction` subclasses built inside
-      `CliAgentDockToolWindowPanel`, so they are absent from the keymap, Find Action and
-      Search Everywhere, and cannot be bound to a shortcut. Give them ids and default
-      keymap entries. Prerequisite for the next item being bindable.
-- [ ] **Send editor context to the active session.** Editor context-menu action plus
-      shortcut that injects a file reference (`@path/to/File.kt:120-145`) or the current
-      selection into the agent's input *without* submitting, so the user types the
-      instruction after. All four agents understand file references, so keep this
-      cross-agent — no per-agent branches.
-      *API settled (no risk here):* `sendCommandToExecute` submits the line, but
-      `widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(text) }` writes
-      straight to the agent's stdin with no trailing newline, and the accessor is backed
-      by a `CompletableFuture`, so it defers until the connector exists and needs no
-      "terminal still booting" handling. `TerminalEscapeRouter` already uses exactly this
-      call to deliver Esc, so the primitive is proven in-tree. Do **not** use
-      `writePlainMessage` — it paints text on the display rather than feeding stdin.
-- [ ] **Surface when an agent wants attention.** Agents block on approval prompts; with
-      the dock collapsed or the IDE backgrounded that goes unnoticed. Badge the tool
-      window stripe or post a `Notification` when a session goes idle after output, or on
-      the terminal bell. Reuse the existing `getText()` `Alarm` poll in
-      `AgentTerminalView` rather than adding a second timer (§5, "mind the hot paths").
+**Done in v0.6.0 — the "IDE context" milestone (§4.8):**
+- [x] All actions registered in `plugin.xml` (New Session, Restart, Open Settings, Focus
+      Agent Terminal, Send File Reference), reachable from Find Action / Search Everywhere
+      and rebindable in the keymap; both toolbars assembled from XML groups.
+- [x] `AgentDockService` project service so argument-less registered actions can reach the
+      live panel, opening the tool window when it isn't up.
+- [x] Send editor context: `@path:lines` inserted into the running agent without
+      submitting, queued when the agent is still starting.
+- [x] Attention notification when an agent goes quiet while its tab isn't on screen,
+      riding the existing poll and gated by a new setting.
 
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry

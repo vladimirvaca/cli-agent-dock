@@ -17,6 +17,11 @@
         <ul>
         <li>Embedded terminal, pre-launched with your agent CLI in your project directory</li>
         <li>Multiple independent, closeable agent sessions per project</li>
+        <li>Send the file and lines you're looking at into the agent's prompt, ready for your
+        instruction — no copy-pasting paths</li>
+        <li>A notification when an agent goes quiet in a tab you're not watching, so an
+        approval prompt doesn't sit unnoticed</li>
+        <li>Every action in Find Action and rebindable in Settings &gt; Keymap</li>
         <li>Live "files changed" panel — see what the agent touched as it works, with
         one-click diffs for each file and a jump to the commit view</li>
         <li>Esc reaches the agent (e.g. to interrupt it) instead of leaving the terminal;
@@ -44,5 +49,55 @@
             id="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
             instance="com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable"
             displayName="CLI Agent Dock"/>
+
+        <notificationGroup
+            id="CLI Agent Dock"
+            displayType="BALLOON"
+            bundle="messages.CliAgentDockBundle"
+            key="notification.group.name"/>
     </extensions>
+
+    <!--
+      Actions are registered here rather than built inline by the tool window panel, so
+      they appear in Find Action / Search Everywhere and can be rebound in Settings >
+      Keymap. The two toolbars are assembled from the groups below, keeping one definition
+      per action. Action text/description come from the classes (which read the message
+      bundle), so they are not duplicated as XML attributes.
+    -->
+    <actions>
+        <action id="CliAgentDock.NewSession"
+                class="com.github.vladimirvaca.cliagentdock.actions.NewSessionAction"/>
+        <action id="CliAgentDock.RestartSession"
+                class="com.github.vladimirvaca.cliagentdock.actions.RestartSessionAction"/>
+        <action id="CliAgentDock.OpenSettings"
+                class="com.github.vladimirvaca.cliagentdock.actions.OpenDockSettingsAction"/>
+
+        <!--
+          Default shortcuts verified free against the bundled $default and
+          "Mac OS X 10.5+" keymaps of the target platform (only ctrl+alt+shift H is taken
+          there), so they should not stomp on an existing binding.
+        -->
+        <action id="CliAgentDock.FocusDock"
+                class="com.github.vladimirvaca.cliagentdock.actions.FocusDockAction">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift D"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt shift D"/>
+        </action>
+
+        <action id="CliAgentDock.SendContext"
+                class="com.github.vladimirvaca.cliagentdock.actions.SendContextAction">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift A"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt shift A"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+
+        <group id="CliAgentDock.Toolbar">
+            <reference ref="CliAgentDock.NewSession"/>
+            <reference ref="CliAgentDock.RestartSession"/>
+        </group>
+
+        <group id="CliAgentDock.SettingsToolbar">
+            <reference ref="CliAgentDock.OpenSettings"/>
+        </group>
+    </actions>
 </idea-plugin>

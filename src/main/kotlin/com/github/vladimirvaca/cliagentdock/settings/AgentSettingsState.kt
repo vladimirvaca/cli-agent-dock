@@ -26,6 +26,9 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
         @JvmField
         var showChangedFiles: Boolean = true
+
+        @JvmField
+        var notifyWhenAgentIdle: Boolean = true
     }
 
     private var state = State()
@@ -62,6 +65,17 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         get() = state.showChangedFiles
         set(value) {
             state.showChangedFiles = value
+        }
+
+    /**
+     * Whether to post a notification when an agent stops producing output while the user
+     * is not looking at its tab. Agents block on approval prompts silently, so this is on
+     * by default; it never fires while the session is on screen.
+     */
+    var notifyWhenAgentIdle: Boolean
+        get() = state.notifyWhenAgentIdle
+        set(value) {
+            state.notifyWhenAgentIdle = value
         }
 
     /** The currently preferred agent, falling back to the default if unknown/disabled. */

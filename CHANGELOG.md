@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Send what you're looking at straight to the agent** — a new **Send File Reference to Agent** action (editor and project-view context menus, or <kbd>Ctrl+Alt+Shift+A</kbd> / <kbd>Cmd+Alt+Shift+A</kbd>) drops `@path/to/File.kt:120-145` into the running agent's prompt and stops there, leaving you to type the actual instruction. With no selection it sends just the file. It opens the dock if it's closed, and if the agent is still starting the text waits and arrives once it's ready.
+- **The dock's actions are real IDE actions now** — New Session, Restart, Open Settings and a new **Focus Agent Terminal** (<kbd>Ctrl+Alt+Shift+D</kbd> / <kbd>Cmd+Alt+Shift+D</kbd>) show up in Find Action and Search Everywhere, and you can rebind any of them under Settings > Keymap. Previously they existed only as toolbar buttons with no keyboard route at all.
+- **A nudge when an agent goes quiet while you're elsewhere** — agents stop and wait for approval without saying so, which is easy to miss with the dock collapsed or the IDE in the background. When a session stops producing output and its tab isn't on screen, a notification offers to jump straight to it. It fires at most once per turn, never while you're looking at that session, and can be switched off with "Notify me when an agent goes quiet" in Settings > Tools > CLI Agent Dock.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added
