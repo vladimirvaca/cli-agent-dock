@@ -372,6 +372,17 @@ branches anywhere in here.
   (the first cut of this) stayed silent whenever the user alt-tabbed away with the dock
   open, which is the commonest way to miss an approval prompt. Gated by the
   `notifyWhenAgentIdle` setting, read per check so toggling it applies mid-session.
+- **It reaches outside the IDE too.** An IntelliJ balloon only renders inside the IDE
+  window, so a user in a browser would never see it. Each notice therefore also calls
+  `SystemNotifications.getInstance().notify(...)` — a Windows toast, macOS Notification
+  Center entry or libnotify popup. **Deliberately unconditional:** the platform's
+  implementation already checks `!Application.isActive` *and* the user's
+  `SYSTEM_NOTIFICATIONS` setting internally (verified by disassembling
+  `SystemNotificationsImpl`), so adding our own condition would only risk diverging from
+  it. `AppIcon.requestAttention(project, false)` additionally flashes the taskbar button /
+  bounces the Dock icon for a muted or missed toast — that one *is* explicitly gated on
+  `!Application.isActive`, since unlike `SystemNotifications` it would otherwise fire
+  while the user is working in the IDE.
 - **It reuses the existing timer.** The check rides `AgentTerminalView`'s exit poll at
   every 4th tick (~2s) rather than adding a second `Alarm`: unlike `isCommandRunning`, it
   needs `getText()`, which materializes the whole scrollback and is too costly to run twice

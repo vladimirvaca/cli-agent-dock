@@ -5,7 +5,10 @@ import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import com.intellij.ui.AppIcon
+import com.intellij.ui.SystemNotifications
 
 /**
  * Tells the user an agent has gone quiet while they were not watching the dock.
@@ -47,13 +50,14 @@ class AgentAttentionWatcher(
     }
 
     private fun notifyAttention() {
+        val title = CliAgentDockBundle["notification.attention.title", sessionTitle]
+        val content = CliAgentDockBundle["notification.attention.content"]
+
+        // In-IDE balloon: carries the click-through action and persists in the
+        // notification list. Only visible while the IDE itself is on screen.
         NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP)
-            .createNotification(
-                CliAgentDockBundle["notification.attention.title", sessionTitle],
-                CliAgentDockBundle["notification.attention.content"],
-                NotificationType.INFORMATION,
-            )
+            .createNotification(title, content, NotificationType.INFORMATION)
             .addAction(
                 NotificationAction.createSimpleExpiring(
                     CliAgentDockBundle["notification.attention.open"],
@@ -61,6 +65,22 @@ class AgentAttentionWatcher(
                 ),
             )
             .notify(project)
+
+        // An IDE balloon is invisible from another application, which is precisely when
+        // a waiting agent is easiest to miss — so also ask the OS (Windows toast, macOS
+        // Notification Center, libnotify). No condition needed here: the platform's
+        // implementation already no-ops while the IDE is active and honours the user's
+        // "system notifications" setting, so this is the whole gate.
+        SystemNotifications.getInstance().notify(NOTIFICATION_GROUP, title, content)
+
+        // Belt and braces for a muted or missed toast: flash the taskbar button on
+        // Windows, bounce the Dock icon on macOS. Gated explicitly because, unlike
+        // SystemNotifications, this would otherwise fire while the user is working in the
+        // IDE. `critical = false` keeps it a single nudge rather than a continuous bounce.
+        // Runs on the EDT already — the caller is a SWING_THREAD Alarm.
+        if (!ApplicationManager.getApplication().isActive) {
+            AppIcon.getInstance().requestAttention(project, false)
+        }
     }
 
     private companion object {

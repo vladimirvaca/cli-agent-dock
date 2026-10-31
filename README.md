@@ -36,7 +36,7 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 | 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring and one-click jumps to the file or the commit view. |
 | 📜 **Always-visible scrollbar** | Keep track of scrollback length in the agent terminal at a glance. |
 | 🎯 **Send context to the agent** | Drop the current file and selected line range into the running agent's prompt, ready for your instruction — no copy-pasting paths. |
-| 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching, instead of finding out minutes later. |
+| 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching — in the IDE, or as a system notification when you've switched to another app. |
 | ⚡ **Keyboard-first** | Every dock action is in Find Action and rebindable in Keymap, with shortcuts for sending context and focusing the terminal. |
 | ⌨️ **Esc stays with the agent** | Esc interrupts the agent instead of leaving the terminal; double-tap Esc to jump back to the editor, or Shift+Esc to hide the dock. |
 | 🤖 **Claude Code by default** | Zero configuration to get started — plus Copilot CLI, Codex CLI, and OpenCode. |
@@ -77,7 +77,8 @@ a broken terminal.
 4. As the agent edits files, a **Files changed** panel appears below the terminal —
    click a row to open the file, or the header to jump to the commit view.
 5. If an agent goes quiet in a tab you're not watching — usually because it wants
-   approval — a notification offers to jump back to it.
+   approval — a notification offers to jump back to it. Away in another application, you
+   get a system notification and a taskbar/Dock nudge instead, so it still reaches you.
 6. To change the agent, go to **Settings/Preferences ▸ Tools ▸ CLI Agent Dock** and pick
    your preferred agent. Your choice is remembered for next time.
 
