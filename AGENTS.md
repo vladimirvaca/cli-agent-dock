@@ -365,10 +365,13 @@ branches anywhere in here.
 - **Attention is a quiet-period heuristic, by design.** Detecting "waiting for approval"
   exactly would mean parsing each agent's prompt — precisely the per-agent coupling this
   plugin avoids. Instead it watches the one agent-agnostic signal available: output stopped
-  arriving. It fires at most once per turn, re-arms on new output, and never fires while
-  that session's tab is on screen with the dock visible (so a background tab finishing
-  *is* announced). Gated by the `notifyWhenAgentIdle` setting, read per check so toggling
-  it applies mid-session.
+  arriving. It fires at most once per turn and re-arms on new output. "The user is
+  watching" means all three of: the tool window is visible, the IDE window has focus
+  (`isDockOnScreen`), and this session is the selected tab — so a background tab finishing,
+  or the IDE sitting behind a browser, both *do* get announced. Checking visibility alone
+  (the first cut of this) stayed silent whenever the user alt-tabbed away with the dock
+  open, which is the commonest way to miss an approval prompt. Gated by the
+  `notifyWhenAgentIdle` setting, read per check so toggling it applies mid-session.
 - **It reuses the existing timer.** The check rides `AgentTerminalView`'s exit poll at
   every 4th tick (~2s) rather than adding a second `Alarm`: unlike `isCommandRunning`, it
   needs `getText()`, which materializes the whole scrollback and is too costly to run twice

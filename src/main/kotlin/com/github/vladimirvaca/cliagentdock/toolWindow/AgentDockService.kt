@@ -6,6 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.WindowManager
 
 /**
  * Bridges the dock's registered actions to the live tool window.
@@ -61,9 +62,18 @@ class AgentDockService(private val project: Project) {
         toolWindow.activate { panel?.focusActiveSession() }
     }
 
-    /** Whether the user is currently looking at the dock: it is visible and the IDE has focus. */
-    fun isDockVisible(): Boolean =
-        ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID)?.isVisible == true
+    /**
+     * Whether the dock is actually in front of the user: the tool window is visible *and*
+     * the IDE window has focus. The focus half matters — leaving the dock open and
+     * switching to a browser is the commonest way to miss an agent waiting for approval,
+     * so visibility alone would stay silent in exactly the case worth announcing.
+     *
+     * Callers add any per-session condition on top (e.g. that it is the selected tab).
+     */
+    fun isDockOnScreen(): Boolean {
+        val visible = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID)?.isVisible == true
+        return visible && WindowManager.getInstance().getFrame(project)?.isActive == true
+    }
 
     companion object {
         /** Must match the `<toolWindow id=...>` in plugin.xml. */

@@ -346,14 +346,15 @@ class CliAgentDockToolWindowPanel(
         /** The live terminal plus the session's changed-files tracking, wired together. */
         private fun createTerminalContent(sessionDisposable: Disposable, executable: File): JComponent {
             val workingDir = project.basePath ?: System.getProperty("user.home")
-            // "Watching" means the dock is visible *and* this session's tab is the one on
-            // screen: a background tab finishing while the user reads another one is
-            // exactly the case worth announcing.
+            // "Watching" means the dock is in front of the user (visible, IDE focused) *and*
+            // this session's tab is the one on screen. A background tab finishing while the
+            // user reads another one — or the IDE sitting behind a browser — is exactly the
+            // case worth announcing.
             val attention = AgentAttentionWatcher(
                 project = project,
                 sessionTitle = title,
                 isUserWatching = {
-                    AgentDockService.getInstance(project).isDockVisible() && currentSession() === this
+                    AgentDockService.getInstance(project).isDockOnScreen() && currentSession() === this
                 },
                 onOpenRequested = {
                     AgentDockService.getInstance(project).withPanel {
