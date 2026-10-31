@@ -19,8 +19,9 @@
         <li>Multiple independent, closeable agent sessions per project</li>
         <li>Send the file and lines you're looking at into the agent's prompt, ready for your
         instruction — no copy-pasting paths</li>
-        <li>A notification when an agent goes quiet in a tab you're not watching, so an
-        approval prompt doesn't sit unnoticed</li>
+        <li>A nudge when an agent goes quiet in a tab you're not watching — in the IDE, or as
+        a system notification when you've switched to another app — so an approval prompt
+        doesn't sit unnoticed</li>
         <li>Every action in Find Action and rebindable in Settings &gt; Keymap</li>
         <li>Live "files changed" panel — see what the agent touched as it works, with
         one-click diffs for each file and a jump to the commit view</li>

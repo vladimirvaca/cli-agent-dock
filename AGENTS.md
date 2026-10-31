@@ -488,6 +488,13 @@ branches anywhere in here.
   `--continue`/`--resume`; renameable or branch-labelled tabs.
 - Files changed panel: revert/stage a file, `+/-` line counts.
 - Per-agent install-docs link in the not-found panel (today it is a dead end).
+- **Platform deprecations to clear before a future IDE bump** — the v0.6.0 verifier run
+  reported these as *scheduled for removal* on IU-263, so they still work today but will
+  not forever: `PathEnvironmentVariableUtil.findInPath(String)` (§4.6 leans on it heavily),
+  `SimpleListCellRenderer.create(Customizer)` in `AgentComboBox`, the
+  `DynamicBundle(String)` constructor in `CliAgentDockBundle`, and the already-deprecated
+  `JediTermWidget.getTerminalStarter()` in `TerminalEscapeRouter`. The verifier verdict is
+  "Compatible" on every target IDE, so this is maintenance, not breakage.
 - README screenshot/GIF of the tool window in action (still a TODO in README.md) —
   probably the highest-leverage change for Marketplace conversion.
 
