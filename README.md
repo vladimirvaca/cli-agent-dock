@@ -35,6 +35,9 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 | 🗂️ **Multiple sessions** | Open several agent tabs at once, each independent and closeable. |
 | 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring and one-click jumps to the file or the commit view. |
 | 📜 **Always-visible scrollbar** | Keep track of scrollback length in the agent terminal at a glance. |
+| 🎯 **Send context to the agent** | Drop the current file and selected line range into the running agent's prompt, ready for your instruction — no copy-pasting paths. |
+| 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching — in the IDE, or as a system notification when you've switched to another app. |
+| ⚡ **Keyboard-first** | Every dock action is in Find Action and rebindable in Keymap, with shortcuts for sending context and focusing the terminal. |
 | ⌨️ **Esc stays with the agent** | Esc interrupts the agent instead of leaving the terminal; double-tap Esc to jump back to the editor, or Shift+Esc to hide the dock. |
 | 🤖 **Claude Code by default** | Zero configuration to get started — plus Copilot CLI, Codex CLI, and OpenCode. |
 | ⚙️ **Choose your agent** | Set a preferred agent; the choice is persisted globally and remembered everywhere. |
@@ -67,10 +70,20 @@ a broken terminal.
 1. Open the **CLI Agent Dock** tool window from the **right** side bar.
 2. A terminal opens in your project directory and launches your preferred agent
    (Claude Code by default). Open more sessions from new tabs as needed.
-3. As the agent edits files, a **Files changed** panel appears below the terminal —
+3. To put the agent on the code you're reading, select some lines and run
+   **Send File Reference to Agent** (editor right-click, or <kbd>Ctrl+Alt+Shift+A</kbd> /
+   <kbd>Cmd+Alt+Shift+A</kbd>). The file and line range land in the agent's prompt without
+   being submitted, so you just type what you want done and press Enter.
+4. As the agent edits files, a **Files changed** panel appears below the terminal —
    click a row to open the file, or the header to jump to the commit view.
-4. To change the agent, go to **Settings/Preferences ▸ Tools ▸ CLI Agent Dock** and pick
+5. If an agent goes quiet in a tab you're not watching — usually because it wants
+   approval — a notification offers to jump back to it. Away in another application, you
+   get a system notification and a taskbar/Dock nudge instead, so it still reaches you.
+6. To change the agent, go to **Settings/Preferences ▸ Tools ▸ CLI Agent Dock** and pick
    your preferred agent. Your choice is remembered for next time.
+
+All of the dock's actions are available in **Find Action** (<kbd>Ctrl+Shift+A</kbd>) and can
+be rebound under **Settings ▸ Keymap ▸ Plugins ▸ CLI Agent Dock**.
 
 ## Installation
 
@@ -97,19 +110,9 @@ a broken terminal.
 CLI Agent Dock is meant to be a *hub* for many coding agents, and to make running one
 inside the IDE genuinely better than running it in a terminal tab.
 
-**Next up — the "IDE context" release:**
-
-- **Send editor context to the agent** — a shortcut and context-menu action that drops
-  the current file and line range (or your selection) straight into the running agent,
-  ready for you to type the instruction.
-- **Keyboard-first** — New Session, Restart and focusing the dock as real IDE actions you
-  can find in Find Action and bind to your own shortcuts.
-- **Attention when it's needed** — a cue in the IDE when an agent is waiting on you,
-  instead of discovering it minutes later.
-
-**Also planned:** per-agent configuration (model, flags, environment variables),
-user-defined custom agents, a per-project agent override, relaunching on an agent change
-in Settings, and session restore across restarts.
+**Planned:** per-agent configuration (model, flags, environment variables), user-defined
+custom agents, a per-project agent override, relaunching on an agent change in Settings,
+and session restore across restarts.
 
 > Four agents work end-to-end today, and the architecture is generalized enough that
 > adding the next one is a registry entry rather than new plumbing.

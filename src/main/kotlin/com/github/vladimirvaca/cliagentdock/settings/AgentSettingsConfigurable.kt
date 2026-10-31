@@ -38,6 +38,12 @@ class AgentSettingsConfigurable : BoundConfigurable(CliAgentDockBundle["settings
                     { settings.showChangedFiles = it },
                 ).comment(CliAgentDockBundle["settings.showChangedFiles.comment"])
             }
+            row {
+                checkBox(CliAgentDockBundle["settings.notifyWhenIdle"]).bindSelected(
+                    { settings.notifyWhenAgentIdle },
+                    { settings.notifyWhenAgentIdle = it },
+                ).comment(CliAgentDockBundle["settings.notifyWhenIdle.comment"])
+            }
         }
     }
 
