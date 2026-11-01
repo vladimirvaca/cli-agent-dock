@@ -75,7 +75,7 @@ ledger; `CHANGELOG.md` is the authoritative release record.
 | Language | Kotlin (JVM) |
 | Build | Gradle (Kotlin DSL) + IntelliJ Platform Gradle Plugin `2.x` |
 | Target platform | IntelliJ IDEA `2025.2.6.2` (see `build.gradle.kts`) |
-| Kotlin plugin | `2.4.0` (see `settings.gradle.kts`) |
+| Kotlin plugin | `2.4.20` (see `settings.gradle.kts`) |
 | Plugin id | `com.github.vladimirvaca.cliagentdock` |
 | Base package | `com.github.vladimirvaca.cliagentdock` |
 | Min IDE build | `since-build` in `plugin.xml` (keep in sync with target) |
