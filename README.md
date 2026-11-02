@@ -10,17 +10,22 @@
 
 <!-- The Marketplace plugin description is maintained directly in src/main/resources/META-INF/plugin.xml -->
 
-No more alt-tabbing between your IDE and a terminal tab to talk to your agent.
-**CLI Agent Dock** adds a dedicated tool window to your JetBrains IDE — right next to
-Database, Gradle, and friends — with an embedded terminal that launches straight into a
-coding agent CLI, already sitting in your project directory.
+Run **Claude Code**, **GitHub Copilot CLI**, **OpenAI Codex CLI** or **OpenCode** in a
+dedicated tool window of any JetBrains IDE: no more alt-tabbing to a terminal to talk
+to your agent.
 
-By default it opens with **Claude Code**; **GitHub Copilot CLI**, **OpenAI Codex CLI**
-and **OpenCode** are supported too. Pick an agent from the dropdown and open as many
-sessions as you like — each runs in its own closeable tab, so you can drive several
-agents side by side. Your preferred agent is **remembered** across projects and restarts.
+**CLI Agent Dock** adds a tool window to the right side bar (next to Database, Gradle
+and the rest) with an embedded terminal that launches straight into your coding agent's
+CLI, already in your project directory. It also connects that agent to the IDE: send
+it the file and lines you are reading, see every file it changes with one-click diffs,
+and get a notification when it stops to wait for you.
 
-CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
+- **One plugin for four agents.** Switch from the dropdown, or run several side by side
+  in separate tabs.
+- **Free and open source** (MIT), with no account, telemetry or extra service: the
+  plugin only launches the agent CLI you already have.
+- **Works in every JetBrains IDE** (IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider,
+  PhpStorm, RubyMine, CLion, …) on **Windows, macOS and Linux**.
 
 <!-- TODO: add a screenshot or GIF of the tool window in action -->
 
@@ -33,8 +38,7 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 | 🧭 **Right-side tool window** | Lives alongside Database, Gradle, and other IDE panels — your agent is always one click away. |
 | 🖥️ **Embedded agent terminal** | A real terminal inside the IDE, opened in your project directory and pre-launched with your agent CLI. |
 | 🗂️ **Multiple sessions** | Open several agent tabs at once, each independent and closeable. |
-| 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring and one-click jumps to the file or the commit view. |
-| 📜 **Always-visible scrollbar** | Keep track of scrollback length in the agent terminal at a glance. |
+| 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring: click a file to open its diff, or jump to the commit view. |
 | 🎯 **Send context to the agent** | Drop the current file and selected line range into the running agent's prompt, ready for your instruction — no copy-pasting paths. |
 | 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching — in the IDE, or as a system notification when you've switched to another app. |
 | ⚡ **Keyboard-first** | Every dock action is in Find Action and rebindable in Keymap, with shortcuts for sending context and focusing the terminal. |
@@ -45,25 +49,28 @@ CLI Agent Dock is **cross-platform** and works on **Windows, macOS, and Linux**.
 
 ## Supported agents
 
-| Agent | CLI | Status |
-|---|---|---|
-| [Claude Code](https://docs.claude.com/en/docs/claude-code) | `claude` | ✅ Supported (default) |
-| [GitHub Copilot CLI](https://docs.github.com/en/copilot) | `copilot` | ✅ Supported |
-| [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | `codex` | ✅ Supported |
-| [OpenCode](https://opencode.ai/docs/) | `opencode` | ✅ Supported |
-| Custom / user-defined agents | | 🗺️ Roadmap |
+| Agent | Command | Install (one option; see the agent's docs for others) | Status |
+|---|---|---|---|
+| [Claude Code](https://docs.claude.com/en/docs/claude-code) | `claude` | `npm install -g @anthropic-ai/claude-code` | ✅ Default |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot) | `copilot` | `npm install -g @github/copilot` | ✅ Supported |
+| [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | `codex` | `npm install -g @openai/codex` | ✅ Supported |
+| [OpenCode](https://opencode.ai/docs/) | `opencode` | `npm install -g opencode-ai` | ✅ Supported |
+| Custom / user-defined agents | | | 🗺️ Roadmap |
+
+Each agent keeps its own login, model and configuration: CLI Agent Dock launches the
+CLI exactly as you would in a terminal, so whatever works there works in the dock.
 
 ## Requirements
 
-- A JetBrains IDE (IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider, etc.).
-- The CLI for the agent you want to use, installed and available on your `PATH`. For
-  example, for the default agent:
-  - **Claude Code** — install from the
-    [Claude Code documentation](https://docs.claude.com/en/docs/claude-code) and verify
-    with `claude --version` in your terminal.
+- A JetBrains IDE, version **2025.2 or newer** (IntelliJ IDEA, PyCharm, WebStorm, GoLand,
+  Rider, PhpStorm, RubyMine, CLion, …).
+- At least one of the agent CLIs above, installed and signed in. Check it from a
+  terminal first, for example `claude --version`.
 
-If the selected agent's CLI can't be found, CLI Agent Dock tells you instead of opening
-a broken terminal.
+You don't need to edit your `PATH` for the IDE: besides `PATH`, the plugin looks in the
+usual install locations of npm, Homebrew, WinGet, Scoop, Chocolatey, Bun and each
+agent's own installer. If the selected agent still can't be found, the dock tells you
+instead of opening a broken terminal.
 
 ## Usage
 
@@ -74,16 +81,44 @@ a broken terminal.
    **Send File Reference to Agent** (editor right-click, or <kbd>Ctrl+Alt+Shift+A</kbd> /
    <kbd>Cmd+Alt+Shift+A</kbd>). The file and line range land in the agent's prompt without
    being submitted, so you just type what you want done and press Enter.
-4. As the agent edits files, a **Files changed** panel appears below the terminal —
-   click a row to open the file, or the header to jump to the commit view.
+4. As the agent edits files, a **Files changed** panel appears below the terminal.
+   Click a file to open its diff, use the file icon to open the file itself, or click
+   the header to jump to the commit view.
 5. If an agent goes quiet in a tab you're not watching — usually because it wants
    approval — a notification offers to jump back to it. Away in another application, you
    get a system notification and a taskbar/Dock nudge instead, so it still reaches you.
 6. To change the agent, go to **Settings/Preferences ▸ Tools ▸ CLI Agent Dock** and pick
    your preferred agent. Your choice is remembered for next time.
 
-All of the dock's actions are available in **Find Action** (<kbd>Ctrl+Shift+A</kbd>) and can
-be rebound under **Settings ▸ Keymap ▸ Plugins ▸ CLI Agent Dock**.
+### Keyboard shortcuts
+
+| Action | Windows / Linux | macOS |
+|---|---|---|
+| Send File Reference to Agent | <kbd>Ctrl+Alt+Shift+A</kbd> | <kbd>Cmd+Alt+Shift+A</kbd> |
+| Focus Agent Terminal | <kbd>Ctrl+Alt+Shift+D</kbd> | <kbd>Cmd+Alt+Shift+D</kbd> |
+| Back to the editor (from the agent terminal) | <kbd>Esc</kbd> <kbd>Esc</kbd> | <kbd>Esc</kbd> <kbd>Esc</kbd> |
+| Hide the dock | <kbd>Shift+Esc</kbd> | <kbd>Shift+Esc</kbd> |
+
+All of the dock's actions are available in **Find Action** (<kbd>Ctrl+Shift+A</kbd> /
+<kbd>Cmd+Shift+A</kbd>) and can be rebound under
+**Settings ▸ Keymap ▸ Plugins ▸ CLI Agent Dock**.
+
+## FAQ
+
+**How is this different from the official Claude Code or GitHub Copilot plugins?**
+Those plugins integrate one vendor's agent. CLI Agent Dock gives you the same docked
+workflow for several agents, so you can switch or run them side by side without
+learning a different plugin for each one.
+
+**Does the plugin send my code anywhere?**
+No. The plugin doesn't make any network calls of its own. It starts the agent CLI in a
+terminal, and the agent talks to its own service exactly as it does when you run it
+yourself.
+
+**My agent is installed but the dock says it can't be found.**
+Make sure it runs from a regular terminal (`claude --version`, `codex --version`, …),
+then click **Retry** in the dock. If it lives somewhere unusual, please
+[open an issue](https://github.com/vladimirvaca/cli-agent-dock/issues) with the path.
 
 ## Installation
 

@@ -2,33 +2,59 @@
 <idea-plugin>
     <id>com.github.vladimirvaca.cliagentdock</id>
     <name>CLI Agent Dock</name>
-    <vendor>vladimirvaca</vendor>
+    <vendor url="https://github.com/vladimirvaca/cli-agent-dock">vladimirvaca</vendor>
 
     <description><![CDATA[
-        <p><b>CLI Agent Dock</b> brings your favorite coding agent right into your JetBrains IDE —
-        no more alt-tabbing to a terminal window. It adds a dedicated tool window to the right
-        side bar (next to Database, Gradle, and friends) with an embedded terminal that
-        automatically launches a coding agent CLI in your project.</p>
-        <p>By default it opens with <b>Claude Code</b>; <b>GitHub Copilot CLI</b>,
-        <b>OpenAI Codex CLI</b> and <b>OpenCode</b> are supported too. Pick an agent from the
-        dropdown and open as many sessions as you like — each runs in its own closeable tab, so
-        you can drive several agents at once. Your preferred agent is remembered across projects
-        and restarts.</p>
+        <p>Run <b>Claude Code</b>, <b>GitHub Copilot CLI</b>, <b>OpenAI Codex CLI</b> or
+        <b>OpenCode</b> in a dedicated tool window of any JetBrains IDE, with no more
+        alt-tabbing to a terminal to talk to your coding agent.</p>
+        <p><b>CLI Agent Dock</b> adds a tool window to the right side bar with an embedded
+        terminal that launches straight into your agent's CLI, already in your project
+        directory. It also connects the agent to the IDE: send it the file and lines you are
+        reading, see every file it changes with one-click diffs, and get a notification when it
+        stops to wait for you.</p>
+
+        <h3>Supported agents</h3>
         <ul>
-        <li>Embedded terminal, pre-launched with your agent CLI in your project directory</li>
-        <li>Multiple independent, closeable agent sessions per project</li>
-        <li>Send the file and lines you're looking at into the agent's prompt, ready for your
-        instruction — no copy-pasting paths</li>
-        <li>A nudge when an agent goes quiet in a tab you're not watching — in the IDE, or as
-        a system notification when you've switched to another app — so an approval prompt
-        doesn't sit unnoticed</li>
-        <li>Every action in Find Action and rebindable in Settings &gt; Keymap</li>
-        <li>Live "files changed" panel — see what the agent touched as it works, with
-        one-click diffs for each file and a jump to the commit view</li>
-        <li>Esc reaches the agent (e.g. to interrupt it) instead of leaving the terminal;
-        double-tap Esc to jump back to the editor, Shift+Esc to hide the dock</li>
-        <li>Cross-platform: Windows, macOS, and Linux</li>
+        <li><a href="https://docs.claude.com/en/docs/claude-code">Claude Code</a> (<code>claude</code>), the default</li>
+        <li><a href="https://docs.github.com/en/copilot">GitHub Copilot CLI</a> (<code>copilot</code>)</li>
+        <li><a href="https://developers.openai.com/codex/cli">OpenAI Codex CLI</a> (<code>codex</code>)</li>
+        <li><a href="https://opencode.ai/docs/">OpenCode</a> (<code>opencode</code>)</li>
         </ul>
+        <p>Switch agents from the dropdown, or run several side by side in separate tabs. Your
+        preferred agent is remembered across projects and restarts.</p>
+
+        <h3>Features</h3>
+        <ul>
+        <li><b>Embedded agent terminal</b>: a real terminal, opened in your project and
+        pre-launched with your agent CLI</li>
+        <li><b>Multiple sessions</b>: independent, closeable agent tabs per project</li>
+        <li><b>Send context</b>: put <code>@path:lines</code> for the current file and selection
+        into the agent's prompt, ready for your instruction (Ctrl+Alt+Shift+A / Cmd+Alt+Shift+A)</li>
+        <li><b>Files changed panel</b>: see what the agent created, modified or deleted as it
+        works; click a file to open its diff, or jump to the commit view</li>
+        <li><b>Approval nudges</b>: a notification when an agent goes quiet in a tab you are not
+        watching, and a system notification when you have switched to another app</li>
+        <li><b>Esc reaches the agent</b> (e.g. to interrupt it); double-tap Esc to return to the
+        editor, Shift+Esc to hide the dock</li>
+        <li><b>Keyboard-first</b>: every action is in Find Action and rebindable in
+        Settings &gt; Keymap</li>
+        <li><b>Finds your install</b>: besides PATH, looks in the usual npm, Homebrew, WinGet,
+        Scoop, Chocolatey and installer locations</li>
+        </ul>
+
+        <h3>Getting started</h3>
+        <ol>
+        <li>Install one of the agent CLIs above and sign in (check with e.g.
+        <code>claude --version</code>).</li>
+        <li>Open the <b>CLI Agent Dock</b> tool window from the right side bar.</li>
+        <li>Pick your preferred agent from the toolbar or in Settings &gt; Tools &gt; CLI Agent Dock.</li>
+        </ol>
+        <p>Free and open source (MIT). The plugin makes no network calls of its own and collects
+        no telemetry: it only launches the agent CLI you already use. Works on Windows, macOS
+        and Linux.
+        <a href="https://github.com/vladimirvaca/cli-agent-dock">Source code</a> ·
+        <a href="https://github.com/vladimirvaca/cli-agent-dock/issues">Report an issue</a></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

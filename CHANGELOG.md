@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Clearer plugin page** — the Marketplace description now lists the supported agents up front, with links, a feature overview, a three-step getting-started guide and links to the source code and issue tracker.
+
 ## [0.6.0] - 2026-10-31
 
 ### Added
