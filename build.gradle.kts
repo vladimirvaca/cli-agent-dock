@@ -107,3 +107,17 @@ intellijPlatform {
         }
     }
 }
+
+// runIdeLocal: runs the plugin in an IDE installed on this machine, avoiding the
+// download of a separate IDE distribution. Registered only when `localIdePath` is set
+// in ~/.gradle/gradle.properties (machine-specific, so not in the project file), e.g.
+//   localIdePath=C:/Program Files/JetBrains/IntelliJ IDEA 2025.3
+providers.gradleProperty("localIdePath").orNull?.let { localIde ->
+    intellijPlatformTesting {
+        runIde {
+            register("runIdeLocal") {
+                localPath = file(localIde)
+            }
+        }
+    }
+}

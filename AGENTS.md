@@ -84,6 +84,7 @@ ledger; `CHANGELOG.md` is the authoritative release record.
 ```bash
 ./gradlew build              # compile + build the plugin
 ./gradlew runIde             # launch a sandbox IDE with the plugin loaded
+./gradlew runIdeLocal        # same, in a locally installed IDE (needs localIdePath in ~/.gradle/gradle.properties)
 ./gradlew test               # run tests
 ./gradlew verifyPlugin       # IntelliJ plugin verifier
 ./gradlew buildPlugin        # produce distributable ZIP in build/distributions
