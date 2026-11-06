@@ -29,6 +29,8 @@
         <li><b>Embedded agent terminal</b>: a real terminal, opened in your project and
         pre-launched with your agent CLI</li>
         <li><b>Multiple sessions</b>: independent, closeable agent tabs per project</li>
+        <li><b>Named tabs</b>: double-click a tab to name it after the task or branch it is
+        working on; the name is also used in notifications</li>
         <li><b>Send context</b>: put <code>@path:lines</code> for the current file and selection
         into the agent's prompt, ready for your instruction (Ctrl+Alt+Shift+A / Cmd+Alt+Shift+A)</li>
         <li><b>Files changed panel</b>: see what the agent created, modified or deleted as it
@@ -96,6 +98,8 @@
                 class="com.github.vladimirvaca.cliagentdock.actions.NewSessionAction"/>
         <action id="CliAgentDock.RestartSession"
                 class="com.github.vladimirvaca.cliagentdock.actions.RestartSessionAction"/>
+        <action id="CliAgentDock.RenameSession"
+                class="com.github.vladimirvaca.cliagentdock.actions.RenameSessionAction"/>
         <action id="CliAgentDock.OpenSettings"
                 class="com.github.vladimirvaca.cliagentdock.actions.OpenDockSettingsAction"/>
 
@@ -120,6 +124,12 @@
 
         <group id="CliAgentDock.Toolbar">
             <reference ref="CliAgentDock.NewSession"/>
+            <reference ref="CliAgentDock.RestartSession"/>
+        </group>
+
+        <!-- Right-click menu on a session tab. -->
+        <group id="CliAgentDock.TabPopup">
+            <reference ref="CliAgentDock.RenameSession"/>
             <reference ref="CliAgentDock.RestartSession"/>
         </group>
 

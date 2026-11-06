@@ -38,6 +38,7 @@ and get a notification when it stops to wait for you.
 | 🧭 **Right-side tool window** | Lives alongside Database, Gradle, and other IDE panels — your agent is always one click away. |
 | 🖥️ **Embedded agent terminal** | A real terminal inside the IDE, opened in your project directory and pre-launched with your agent CLI. |
 | 🗂️ **Multiple sessions** | Open several agent tabs at once, each independent and closeable. |
+| 🏷️ **Named tabs** | Double-click a tab (or right-click ▸ Rename Session) to call it "Auth refactor" instead of "Claude Code (2)". The name is also used in notifications. |
 | 📝 **Live "files changed" panel** | See what the agent created, modified, or deleted as it works, with VCS-style coloring: click a file to open its diff, or jump to the commit view. |
 | 🎯 **Send context to the agent** | Drop the current file and selected line range into the running agent's prompt, ready for your instruction — no copy-pasting paths. |
 | 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching — in the IDE, or as a system notification when you've switched to another app. |
@@ -76,7 +77,9 @@ instead of opening a broken terminal.
 
 1. Open the **CLI Agent Dock** tool window from the **right** side bar.
 2. A terminal opens in your project directory and launches your preferred agent
-   (Claude Code by default). Open more sessions from new tabs as needed.
+   (Claude Code by default). Open more sessions from new tabs as needed, and
+   double-click a tab to give it a name, such as the task or branch it is working on.
+   Right-clicking a tab also offers Restart.
 3. To put the agent on the code you're reading, select some lines and run
    **Send File Reference to Agent** (editor right-click, or <kbd>Ctrl+Alt+Shift+A</kbd> /
    <kbd>Cmd+Alt+Shift+A</kbd>). The file and line range land in the agent's prompt without
