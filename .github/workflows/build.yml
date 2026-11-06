@@ -1,7 +1,17 @@
-# CI for pushes to 'main' and pull requests:
-# - Build the plugin ZIP ('buildPlugin') and upload it as a workflow artifact.
-# - Run tests and static checks ('check'), uploading reports on failure.
-# - Run plugin structure verification and IntelliJ Plugin Verifier ('verifyPlugin').
+# CI for pushes to 'main' and pull requests, in two parallel jobs:
+# - build: build the plugin ZIP ('buildPlugin') and run tests and static checks ('check').
+# - verify: IntelliJ Plugin Verifier ('verifyPlugin') against the recommended IDE set.
+#
+# Why two jobs: verifyPlugin downloads one full IDE per supported major version (five
+# today), roughly 18 GB downloaded plus unpacked. GitHub caps a repository's Actions cache
+# at 10 GB, so caching those IDEs evicted the build's own cache on every run and both jobs
+# started cold. The verify job therefore runs with the Gradle cache disabled (fetching the
+# IDEs from JetBrains' CDN is faster than that cache thrash), which keeps the build job's
+# cache small enough to actually be reused.
+#
+# verify skips pull requests: it catches IntelliJ API removals, which change when JetBrains
+# ships an IDE, not with a PR. It runs on pushes to main, weekly, and on demand
+# (Actions > Build > Run workflow, which can target a PR branch too).
 #
 # Releases are handled separately by release.yml, triggered by pushing a 'v*' tag.
 # See RELEASING.md for the release procedure.
@@ -13,6 +23,10 @@ on:
     branches: [ main ]
   # Trigger the workflow on any pull request
   pull_request:
+  # Weekly verifier run, so a newly released IDE is checked even without commits.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -21,7 +35,7 @@ concurrency:
 jobs:
 
   build:
-    name: Build, Test and Verify
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
 
@@ -37,9 +51,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # One invocation for all three so configuration, daemon, and caches are paid once.
-      - name: Build, check and verify
-        run: ./gradlew buildPlugin check verifyPlugin
+      # One invocation for both so configuration, daemon, and caches are paid once.
+      - name: Build and check
+        run: ./gradlew buildPlugin check
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v7
@@ -53,6 +67,30 @@ jobs:
         with:
           name: test-reports
           path: build/reports/tests
+
+  verify:
+    name: Plugin Verifier
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 21
+
+      # Cache disabled on purpose: see the note at the top of this file.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
+
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin
 
       - name: Collect Plugin Verifier reports
         if: ${{ always() }}
