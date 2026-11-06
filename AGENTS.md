@@ -103,8 +103,8 @@ plumbing. Actual layout:
 CliAgentDockBundle.kt                i18n bundle object (messages/CliAgentDockBundle.properties).
 
 actions/
-  AgentDockActions.kt            New Session, Restart, Open Settings and Focus Agent
-                                 Terminal, all registered in plugin.xml (§4.8). Thin
+  AgentDockActions.kt            New Session, Restart, Rename Session, Open Settings and
+                                 Focus Agent Terminal, all registered in plugin.xml (§4.8). Thin
                                  delegates — the panel is reached via AgentDockService.
   SendContextAction.kt           Inserts "@path:lines" for the current file/selection into
                                  the running agent without submitting (§4.8). Holds the
@@ -122,9 +122,12 @@ toolWindow/
                                  of sessions. Each closeable tab is an independent agent
                                  session (own Disposable) holding an OnePixelSplitter:
                                  terminal on top, ChangedFilesPanel below (hidden until
-                                 the session changes a file). Handles restart, the
-                                 "agent not found" and "no active sessions" empty states
-                                 (JBPanelWithEmptyText with clickable actions).
+                                 the session changes a file). Handles restart, renaming
+                                 (double-click a tab, or its right-click menu built from
+                                 the CliAgentDock.TabPopup group; names are cleaned up by
+                                 the testable SessionTitles), the "agent not found" and
+                                 "no active sessions" empty states (JBPanelWithEmptyText
+                                 with clickable actions).
 
 changes/
   SessionFileChangeTracker.kt    VFS BulkFileListener scoped to the session Disposable;
@@ -341,8 +344,9 @@ branches anywhere in here.
   subclasses built inside `CliAgentDockToolWindowPanel`, which meant they existed nowhere
   in the keymap, Find Action or Search Everywhere, and could not be bound to a shortcut.
   Both toolbars are now assembled from the XML groups `CliAgentDock.Toolbar` and
-  `CliAgentDock.SettingsToolbar`, so each action has exactly one definition.
-  `actionGroup()` throws rather than silently rendering an empty toolbar if an id is
+  `CliAgentDock.SettingsToolbar`, and a tab's right-click menu from
+  `CliAgentDock.TabPopup` (Rename Session, Restart), so each action has exactly one
+  definition. `actionGroup()` throws rather than silently rendering an empty toolbar if an id is
   mistyped. Action text/description still come from the classes (which read the bundle),
   so strings are not duplicated into XML attributes.
 - **`AgentDockService` (project level) is how actions find the panel.** The platform
@@ -350,9 +354,10 @@ branches anywhere in here.
   The panel attaches itself on creation and detaches via its `Disposable` (identity-guarded,
   so a stale disposal cannot null out a newer panel). Anything invokable from outside the
   dock must handle the tool window being closed: `withPanel {}` activates it first and runs
-  the body from the activation callback, once the content exists. `RestartSessionAction` is
-  the deliberate exception — it reads `attachedPanel` directly, because an action that is
-  *disabled for lack of a session* must not open the dock as a side effect of `update`.
+  the body from the activation callback, once the content exists. `RestartSessionAction`
+  and `RenameSessionAction` are the deliberate exceptions — they read `attachedPanel`
+  directly, because an action that is *disabled for lack of a session* must not open the
+  dock as a side effect of `update`.
 - **Default shortcuts were verified, not guessed:** `ctrl alt shift D` (focus) and
   `ctrl alt shift A` (send context), with `meta alt shift` variants for
   `Mac OS X 10.5+`. Grepping the bundled keymaps of the target platform showed
@@ -483,6 +488,15 @@ branches anywhere in here.
 - [x] Attention notification when an agent goes quiet while its tab isn't on screen,
       riding the existing poll and gated by a new setting.
 
+**Done since v0.6.0 (unreleased):**
+- [x] Renameable session tabs: double-click a tab, its right-click menu
+      (`CliAgentDock.TabPopup`: Rename Session, Restart) or the registered Rename Session
+      action. Names are cleaned up by `SessionTitles` (trimmed, whitespace collapsed,
+      capped at 40 chars) and used by the attention notification. Not persisted across
+      restarts; that belongs with session restore.
+- [x] Marketplace description and README refreshed; `runIdeLocal` Gradle task for
+      running the sandbox in an installed IDE.
+
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
   entry uses it yet, so this is mostly a settings UI.
@@ -491,7 +505,7 @@ branches anywhere in here.
 - Live relaunch when the preferred agent changes in Settings (the `AgentSettingsListener`
   topic added in v0.4.0 already provides the publish point).
 - Session restore across restarts, ideally paired with each agent's own
-  `--continue`/`--resume`; renameable or branch-labelled tabs.
+  `--continue`/`--resume`; branch-labelled tabs (manual renaming already exists).
 - Files changed panel: revert/stage a file, `+/-` line counts.
 - Per-agent install-docs link in the not-found panel (today it is a dead end).
 - **Platform deprecations to clear before a future IDE bump** — the v0.6.0 verifier run

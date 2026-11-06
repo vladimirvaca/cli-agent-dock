@@ -4,9 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Name your session tabs** — double-click a tab, or right-click it and choose **Rename Session...**, to replace "Claude Code (2)" with something that says what that session is working on. Handy when several sessions of the same agent run side by side. The new name is also used in the "agent is waiting" notification. The same right-click menu also offers Restart. Rename Session is in Find Action too, and can be given a shortcut in Settings > Keymap. Names last while the tab is open; they are not kept across IDE restarts.
+
 ### Changed
 
-- **Clearer plugin page** — the Marketplace description now lists the supported agents up front, with links, a feature overview, a three-step getting-started guide and links to the source code and issue tracker.
+- **Clearer plugin page** — the Marketplace description now lists the supported agents up front, with links, a feature overview (including named tabs), a three-step getting-started guide and links to the source code and issue tracker.
 
 ## [0.6.0] - 2026-10-31
 

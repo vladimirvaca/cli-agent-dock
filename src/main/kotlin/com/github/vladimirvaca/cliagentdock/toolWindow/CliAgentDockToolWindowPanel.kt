@@ -23,6 +23,8 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.InputValidator
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.openapi.util.Disposer
@@ -40,9 +42,12 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.JComponent
 import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 
 /**
  * The right-anchored CLI Agent Dock tool window content: a small toolbar to pick an
@@ -68,10 +73,12 @@ class CliAgentDockToolWindowPanel(
         /** Action group ids declared in plugin.xml. */
         private const val GROUP_TOOLBAR = "CliAgentDock.Toolbar"
         private const val GROUP_SETTINGS = "CliAgentDock.SettingsToolbar"
+        private const val GROUP_TAB_POPUP = "CliAgentDock.TabPopup"
 
         /** ActionPlaces for the two toolbars, used for action-system diagnostics. */
         private const val PLACE_TOOLBAR = "CliAgentDockToolbar"
         private const val PLACE_SETTINGS_TOOLBAR = "CliAgentDockSettingsToolbar"
+        private const val PLACE_TAB_POPUP = "CliAgentDockTabPopup"
     }
 
     private val settings = AgentSettingsState.getInstance()
@@ -160,6 +167,11 @@ class CliAgentDockToolWindowPanel(
         currentSession()?.restart()
     }
 
+    /** Asks for a new name for the selected session's tab. */
+    fun renameActiveSession() {
+        currentSession()?.promptRename()
+    }
+
     /** Moves focus into the selected session's terminal, if there is one. */
     fun focusActiveSession() {
         currentSession()?.focusTerminal()
@@ -243,8 +255,13 @@ class CliAgentDockToolWindowPanel(
      * its session as a [SESSION_KEY] client property, so selected-tab → session resolution
      * is a direct lookup instead of a scan.
      */
-    private inner class AgentSession(private val agent: Agent, val title: String) {
+    private inner class AgentSession(private val agent: Agent, initialTitle: String) {
 
+        /** The tab's label; starts as the agent name and changes when the user renames the tab. */
+        var title: String = initialTitle
+            private set
+
+        private val titleLabel = JBLabel(initialTitle, AgentIcons.forAgent(agent), SwingConstants.LEADING)
         val header: JComponent = createHeader()
         private var disposable: Disposable? = null
         private var closed = false
@@ -292,6 +309,33 @@ class CliAgentDockToolWindowPanel(
         fun select() {
             val index = tabs.indexOfTabComponent(header)
             if (index >= 0) tabs.selectedIndex = index
+        }
+
+        /**
+         * Shows the rename dialog, prefilled with the current name. Blank input cannot be
+         * confirmed; cancelling leaves the title unchanged.
+         */
+        fun promptRename() {
+            val input = Messages.showInputDialog(
+                project,
+                CliAgentDockBundle["rename.message"],
+                CliAgentDockBundle["rename.title"],
+                null,
+                title,
+                SessionTitleValidator,
+            )
+            SessionTitles.normalize(input)?.let(::rename)
+        }
+
+        private fun rename(newTitle: String) {
+            title = newTitle
+            titleLabel.text = newTitle
+            // Keeps the tab's own title in sync for the overflow list and screen readers,
+            // which read it rather than the custom header component.
+            val index = tabs.indexOfTabComponent(header)
+            if (index >= 0) tabs.setTitleAt(index, newTitle)
+            header.revalidate()
+            header.repaint()
         }
 
         fun close() {
@@ -352,7 +396,7 @@ class CliAgentDockToolWindowPanel(
             // case worth announcing.
             val attention = AgentAttentionWatcher(
                 project = project,
-                sessionTitle = title,
+                sessionTitle = { title },
                 isUserWatching = {
                     AgentDockService.getInstance(project).isDockOnScreen() && currentSession() === this
                 },
@@ -431,9 +475,54 @@ class CliAgentDockToolWindowPanel(
 
             return JBPanel<JBPanel<*>>(HorizontalLayout(JBUI.scale(4))).apply {
                 isOpaque = false
-                add(JBLabel(title, AgentIcons.forAgent(agent), SwingConstants.LEADING))
+                add(titleLabel)
                 add(closeButton)
+                // A mouse listener here takes clicks away from the tabbed pane, so the
+                // header selects its own tab; on top of that, double-click renames and
+                // right-click opens the tab menu.
+                addMouseListener(object : MouseAdapter() {
+                    override fun mousePressed(e: MouseEvent) {
+                        select()
+                        showTabPopup(e)
+                    }
+
+                    override fun mouseReleased(e: MouseEvent) = showTabPopup(e)
+
+                    override fun mouseClicked(e: MouseEvent) {
+                        if (SwingUtilities.isLeftMouseButton(e) && e.clickCount == 2) promptRename()
+                    }
+                })
             }
         }
+
+        /** The tab's context menu, built from the plugin.xml group so its actions stay in one place. */
+        private fun showTabPopup(e: MouseEvent) {
+            if (!e.isPopupTrigger) return
+            val popup = ActionManager.getInstance().createActionPopupMenu(PLACE_TAB_POPUP, actionGroup(GROUP_TAB_POPUP))
+            popup.setTargetComponent(this@CliAgentDockToolWindowPanel)
+            popup.component.show(e.component, e.x, e.y)
+        }
+    }
+}
+
+/** Rejects names that are empty once trimmed, which would leave a tab with no label. */
+private object SessionTitleValidator : InputValidator {
+    override fun checkInput(inputString: String?): Boolean = SessionTitles.normalize(inputString) != null
+    override fun canClose(inputString: String?): Boolean = checkInput(inputString)
+}
+
+/** Clean-up rules for user-entered tab names, kept platform-free so they are unit-testable. */
+internal object SessionTitles {
+
+    /** Long enough for a branch name or task description, short enough to fit a tab. */
+    const val MAX_LENGTH = 40
+
+    /**
+     * Trims, collapses internal whitespace (a pasted newline would break the tab layout)
+     * and caps the length. Returns null for blank input, meaning "keep the current name".
+     */
+    fun normalize(input: String?): String? {
+        val cleaned = input?.trim()?.replace(Regex("\\s+"), " ").orEmpty()
+        return cleaned.takeIf { it.isNotEmpty() }?.take(MAX_LENGTH)?.trimEnd()
     }
 }

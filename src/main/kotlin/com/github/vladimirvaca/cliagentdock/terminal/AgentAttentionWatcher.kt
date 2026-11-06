@@ -26,7 +26,8 @@ import com.intellij.ui.SystemNotifications
  */
 class AgentAttentionWatcher(
     private val project: Project,
-    private val sessionTitle: String,
+    /** Read when a notice fires, so a tab renamed mid-session is announced by its new name. */
+    private val sessionTitle: () -> String,
     /** True while the user can see the dock, in which case there is nothing to announce. */
     private val isUserWatching: () -> Boolean,
     /** Brings the session into view when the user clicks the notification. */
@@ -50,7 +51,7 @@ class AgentAttentionWatcher(
     }
 
     private fun notifyAttention() {
-        val title = CliAgentDockBundle["notification.attention.title", sessionTitle]
+        val title = CliAgentDockBundle["notification.attention.title", sessionTitle()]
         val content = CliAgentDockBundle["notification.attention.content"]
 
         // In-IDE balloon: carries the click-through action and persists in the

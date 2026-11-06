@@ -67,6 +67,32 @@ class RestartSessionAction : AnAction(
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 }
 
+/**
+ * Renames the selected session's tab, e.g. to tell apart two sessions of the same agent
+ * working on different tasks. Also reachable by double-clicking a tab or from its
+ * right-click menu. Like [RestartSessionAction] it never opens the dock on its own.
+ */
+class RenameSessionAction : AnAction(
+    CliAgentDockBundle["action.rename.text"],
+    CliAgentDockBundle["action.rename.description"],
+    AllIcons.Actions.Edit,
+), DumbAware {
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        AgentDockService.getInstance(project).attachedPanel?.renameActiveSession()
+    }
+
+    override fun update(e: AnActionEvent) {
+        val project = e.project
+        e.presentation.isEnabled =
+            project != null && AgentDockService.getInstance(project).attachedPanel?.hasActiveSession() == true
+    }
+
+    // Touches Swing state (the selected tab), so it must be computed on the EDT.
+    override fun getActionUpdateThread() = ActionUpdateThread.EDT
+}
+
 class OpenDockSettingsAction : AnAction(
     CliAgentDockBundle["action.settings.text"],
     CliAgentDockBundle["action.settings.description"],
