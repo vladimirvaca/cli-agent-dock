@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05
+
 ### Added
 
 - **Name your session tabs** — double-click a tab, or right-click it and choose **Rename Session...**, to replace "Claude Code (2)" with something that says what that session is working on. Handy when several sessions of the same agent run side by side. The new name is also used in the "agent is waiting" notification. The same right-click menu also offers Restart. Rename Session is in Find Action too, and can be given a shortcut in Settings > Keymap. Names last while the tab is open; they are not kept across IDE restarts.
@@ -94,7 +96,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.3.0...v0.4.0
