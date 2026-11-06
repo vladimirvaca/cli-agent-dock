@@ -27,7 +27,7 @@ one-click diffs (§4.5).
 
 ## 2. Current status
 
-**v0.6.0 is released** (2026-10-31) and the plugin is published on the
+**v0.7.0 is released** (2026-11-05) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -57,6 +57,11 @@ What's shipped, in order of arrival:
   lines into the running agent without submitting, every dock action registered so it is
   findable and rebindable, and a nudge — in the IDE, or an OS notification when you are in
   another app — when an agent goes quiet unwatched.
+- **v0.7.0** — **named session tabs** (double-click a tab or right-click ▸ Rename Session;
+  the name is also used in notifications), a tab right-click menu with Restart, and a
+  refreshed Marketplace description and README. Also, not user-facing: a `runIdeLocal`
+  Gradle task and a CI split that keeps the Plugin Verifier's IDEs out of the Actions
+  cache (§7).
 
 **Current focus:** the "Later" ledger in §7. The agent catalog is four entries deep (Claude
 Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode) and broadening it further is
@@ -488,7 +493,7 @@ branches anywhere in here.
 - [x] Attention notification when an agent goes quiet while its tab isn't on screen,
       riding the existing poll and gated by a new setting.
 
-**Done since v0.6.0 (unreleased):**
+**Done in v0.7.0 (2026-11-05):**
 - [x] Renameable session tabs: double-click a tab, its right-click menu
       (`CliAgentDock.TabPopup`: Rename Session, Restart) or the registered Rename Session
       action. Names are cleaned up by `SessionTitles` (trimmed, whitespace collapsed,
@@ -496,6 +501,10 @@ branches anywhere in here.
       restarts; that belongs with session restore.
 - [x] Marketplace description and README refreshed; `runIdeLocal` Gradle task for
       running the sandbox in an installed IDE.
+- [x] CI: `build.yml` split into a cached Build and Test job and an uncached Plugin
+      Verifier job (pushes to `main`, weekly, on demand; skipped on PRs). The verifier's
+      five IDEs exceeded GitHub's 10 GB cache limit and evicted the build cache on every
+      run; PR checks went from ~10–13 min to ~2.5 min.
 
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
