@@ -5,8 +5,8 @@
     <vendor url="https://github.com/vladimirvaca/cli-agent-dock">vladimirvaca</vendor>
 
     <description><![CDATA[
-        <p>Run <b>Claude Code</b>, <b>GitHub Copilot CLI</b>, <b>OpenAI Codex CLI</b> or
-        <b>OpenCode</b> in a dedicated tool window of any JetBrains IDE, with no more
+        <p>Run <b>Claude Code</b>, <b>GitHub Copilot CLI</b>, <b>OpenAI Codex CLI</b>,
+        <b>OpenCode</b> or <b>Cursor CLI</b> in a dedicated tool window of any JetBrains IDE, with no more
         alt-tabbing to a terminal to talk to your coding agent.</p>
         <p><b>CLI Agent Dock</b> adds a tool window to the right side bar with an embedded
         terminal that launches straight into your agent's CLI, already in your project
@@ -20,6 +20,7 @@
         <li><a href="https://docs.github.com/en/copilot">GitHub Copilot CLI</a> (<code>copilot</code>)</li>
         <li><a href="https://developers.openai.com/codex/cli">OpenAI Codex CLI</a> (<code>codex</code>)</li>
         <li><a href="https://opencode.ai/docs/">OpenCode</a> (<code>opencode</code>)</li>
+        <li><a href="https://cursor.com/docs/cli/overview">Cursor CLI</a> (<code>cursor-agent</code>)</li>
         </ul>
         <p>Switch agents from the dropdown, or run several side by side in separate tabs. Your
         preferred agent is remembered across projects and restarts.</p>

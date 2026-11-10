@@ -10,8 +10,8 @@
 
 <!-- The Marketplace plugin description is maintained directly in src/main/resources/META-INF/plugin.xml -->
 
-Run **Claude Code**, **GitHub Copilot CLI**, **OpenAI Codex CLI** or **OpenCode** in a
-dedicated tool window of any JetBrains IDE: no more alt-tabbing to a terminal to talk
+Run **Claude Code**, **GitHub Copilot CLI**, **OpenAI Codex CLI**, **OpenCode** or
+**Cursor CLI** in a dedicated tool window of any JetBrains IDE: no more alt-tabbing to a terminal to talk
 to your agent.
 
 **CLI Agent Dock** adds a tool window to the right side bar (next to Database, Gradle
@@ -44,7 +44,7 @@ and get a notification when it stops to wait for you.
 | 🔔 **Nudge when it's waiting** | Get told when an agent goes quiet in a tab you're not watching — in the IDE, or as a system notification when you've switched to another app. |
 | ⚡ **Keyboard-first** | Every dock action is in Find Action and rebindable in Keymap, with shortcuts for sending context and focusing the terminal. |
 | ⌨️ **Esc stays with the agent** | Esc interrupts the agent instead of leaving the terminal; double-tap Esc to jump back to the editor, or Shift+Esc to hide the dock. |
-| 🤖 **Claude Code by default** | Zero configuration to get started — plus Copilot CLI, Codex CLI, and OpenCode. |
+| 🤖 **Claude Code by default** | Zero configuration to get started — plus Copilot CLI, Codex CLI, OpenCode, and Cursor CLI. |
 | ⚙️ **Choose your agent** | Set a preferred agent; the choice is persisted globally and remembered everywhere. |
 | 🌍 **Cross-platform** | Windows, macOS, and Linux. |
 
@@ -56,6 +56,7 @@ and get a notification when it stops to wait for you.
 | [GitHub Copilot CLI](https://docs.github.com/en/copilot) | `copilot` | `npm install -g @github/copilot` | ✅ Supported |
 | [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | `codex` | `npm install -g @openai/codex` | ✅ Supported |
 | [OpenCode](https://opencode.ai/docs/) | `opencode` | `npm install -g opencode-ai` | ✅ Supported |
+| [Cursor CLI](https://cursor.com/docs/cli/overview) | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` | ✅ Supported |
 | Custom / user-defined agents | | | 🗺️ Roadmap |
 
 Each agent keeps its own login, model and configuration: CLI Agent Dock launches the
