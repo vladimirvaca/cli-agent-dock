@@ -414,6 +414,14 @@ branches anywhere in here.
   (the first cut of this) stayed silent whenever the user alt-tabbed away with the dock
   open, which is the commonest way to miss an approval prompt. Gated by the
   `notifyWhenAgentIdle` setting, read per check so toggling it applies mid-session.
+- **Focus changes are not output.** The signal is the buffer *length*, and agents' TUIs
+  repaint when focus moves (focus in/out reporting, re-layout), which changes it without
+  the agent doing anything. Counting that as new output re-armed the notice, so leaving
+  an idle session that had been seen or announced announced it again. `AttentionDecider`
+  therefore takes a `focusChanged` flag (watching state or `Application.isActive`
+  flipped since the last check). When it flips on a session already quiet for
+  `idleChecksRequired` checks, changes in the next `settleChecks` checks (~4s) only move
+  the baseline. A turn that is still producing output when focus moves is not affected.
 - **It reaches outside the IDE too.** An IntelliJ balloon only renders inside the IDE
   window, so a user in a browser would never see it. Each notice therefore also calls
   `SystemNotifications.getInstance().notify(...)` — a Windows toast, macOS Notification

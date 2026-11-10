@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **"Agent is waiting" no longer repeats itself** — after an agent finished and you'd seen it (or dismissed the notice), switching to another app could bring the same notification back although the agent hadn't done anything. Agents redraw their screen when the IDE gains or loses focus, and the dock mistook that redraw for new output. Screen changes in the few seconds after a focus change on an idle session are now treated as a redraw. A new turn still gets its own notice.
 - **No more "Must not execute inside read action" / "Access from Event Dispatch Thread (EDT) is not allowed" errors on 2026.2 IDEs** — the dock's background check for an agent that exited without closing its shell asked the terminal whether a command was still running from the UI thread. From 2026.2 (e.g. Rider 2026.2.4.1) the platform requires that check to run on a background thread, and reported an IDE error whenever it didn't — often while you were opening a diff from the Files changed panel. The check now runs in the background. Text the dock types into the agent (Send File Reference, Esc) is also written from a background thread now, still in the order it was sent. ([#21](https://github.com/vladimirvaca/cli-agent-dock/issues/21))
 
 ## [0.7.0] - 2026-11-05
