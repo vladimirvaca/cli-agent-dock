@@ -260,9 +260,15 @@ class ChangedFilesPanel(
         onMinimizedChanged()
     }
 
-    /** Replaces the shown list with the tracker's latest cumulative snapshot. */
+    /**
+     * Replaces the shown list with the tracker's latest cumulative snapshot. The tracker
+     * also reports after every VCS update, most of which change nothing shown here, so an
+     * identical snapshot leaves the list alone: no model reset, relayout or repaint.
+     */
     fun update(changes: List<ChangedFile>) {
-        untrackedPaths = untrackedIn(changes)
+        val untracked = untrackedIn(changes)
+        if (untracked == untrackedPaths && changes == model.items) return
+        untrackedPaths = untracked
         model.replaceAll(changes)
         changeCount = changes.size
         renderCountLabel()

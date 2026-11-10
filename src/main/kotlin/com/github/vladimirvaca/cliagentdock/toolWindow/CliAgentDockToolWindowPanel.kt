@@ -266,6 +266,9 @@ class CliAgentDockToolWindowPanel(
         private var disposable: Disposable? = null
         private var closed = false
 
+        /** True from session creation/restart until the executable lookup has landed. */
+        private var resolving = false
+
         /**
          * The terminal view whose agent exit should close this tab. Cleared/replaced right
          * before a view is intentionally torn down (restart) so that view's late termination
@@ -273,6 +276,15 @@ class CliAgentDockToolWindowPanel(
          * rather than closing the tab we just restarted.
          */
         private var liveView: AgentTerminalView? = null
+
+        /**
+         * Text sent while this session has no terminal yet: the executable is still being
+         * resolved on a pooled thread, which is always the case right after the session
+         * is created (e.g. Send File Reference opening the dock or its first tab).
+         * Handed to the view as soon as it exists; the view queues it further until the
+         * agent is ready. Dropped if the session is restarted or the agent isn't found.
+         */
+        private var pendingInput: StringBuilder? = null
 
         fun open() {
             val content = createContent()
@@ -293,12 +305,16 @@ class CliAgentDockToolWindowPanel(
         }
 
         /**
-         * Types [text] into this session's agent without submitting. A no-op while the
-         * executable is still being resolved (no view yet) — the only window in which the
-         * dock is open but has nothing to type into.
+         * Types [text] into this session's agent without submitting. Held in
+         * [pendingInput] while the executable is still being resolved (no view yet).
          */
         fun sendInput(text: String) {
-            liveView?.sendInput(text)
+            val view = liveView
+            if (view != null) {
+                view.sendInput(text)
+            } else if (resolving) {
+                (pendingInput ?: StringBuilder().also { pendingInput = it }).append(text)
+            }
         }
 
         fun focusTerminal() {
@@ -367,12 +383,15 @@ class CliAgentDockToolWindowPanel(
             var expired = false
             Disposer.register(sessionDisposable) { expired = true }
             val container = BorderLayoutPanel().addToCenter(createResolvingPanel(sessionDisposable))
+            resolving = true
             ApplicationManager.getApplication().executeOnPooledThread {
                 val executable = AgentExecutableResolver.resolve(agent)
                 ApplicationManager.getApplication().invokeLater(
                     {
+                        resolving = false
                         container.removeAll()
                         val content = if (executable == null) {
+                            pendingInput = null
                             createNotFoundPanel(agent, onRetry = ::restart)
                         } else {
                             createTerminalContent(sessionDisposable, executable)
@@ -417,6 +436,10 @@ class CliAgentDockToolWindowPanel(
                 attention = attention,
             )
             liveView = view
+            pendingInput?.let {
+                pendingInput = null
+                view.sendInput(it.toString())
+            }
 
             // Terminal on top; a "Files changed" panel appears below only once this
             // session's agent modifies something (and the setting allows it), and
@@ -452,9 +475,12 @@ class CliAgentDockToolWindowPanel(
                 .connect(sessionDisposable)
                 .subscribe(AgentSettingsListener.TOPIC, AgentSettingsListener { placeChangedFiles() })
             tracker = SessionFileChangeTracker(project, workingDir, sessionDisposable) { changes ->
+                val hadChanges = hasChanges
                 hasChanges = changes.isNotEmpty()
                 changedFiles.update(changes)
-                placeChangedFiles()
+                // Re-placing relayouts the whole tab; only the empty/non-empty flip moves
+                // the panel, so an ordinary list update leaves the layout alone.
+                if (hadChanges != hasChanges) placeChangedFiles()
             }
             return container
         }
@@ -462,6 +488,9 @@ class CliAgentDockToolWindowPanel(
         private fun disposeSession() {
             disposable?.let { Disposer.dispose(it) }
             disposable = null
+            liveView = null
+            pendingInput = null
+            resolving = false
         }
 
         private fun createHeader(): JComponent {

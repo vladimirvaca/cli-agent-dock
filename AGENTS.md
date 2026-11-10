@@ -135,9 +135,12 @@ toolWindow/
                                  with clickable actions).
 
 changes/
-  SessionFileChangeTracker.kt    VFS BulkFileListener scoped to the session Disposable;
-                                 accumulates external (agent-made) file changes under the
-                                 project (§4.5).
+  SessionChangeHub.kt            Project service: the one VFS BulkFileListener, fanning
+                                 batches out to the live trackers and sharing the
+                                 VCS-ignore check between them (§4.5).
+  SessionFileChangeTracker.kt    Per session, scoped to its Disposable; accumulates
+                                 external (agent-made) file changes under the project
+                                 (§4.5).
   ChangedFilesPanel.kt           The "Files changed" strip below a session's terminal:
                                  VCS-colored hyperlink rows, click = diff view, open-file
                                  icon, header with count / commit-view jump / minimize /
@@ -283,6 +286,9 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   several consecutive not-running samples before it closes: during shell boot the integration
   scripts register as a running command that goes idle before the queued agent command spawns,
   and a poll catching that gap used to close freshly opened tabs.
+- The poll ticks every **2 s** and needs 2 not-running samples to close. It is slow on
+  purpose: on macOS/Linux every probe starts a `ps` process, for the life of every
+  session, and the termination callback is the real signal.
 - The poll ticks on the EDT (the attention check's `getText()` stays there), but the
   `isCommandRunning()` probe itself runs on a **pooled thread**: the Terminal plugin answers
   it with `TerminalUtil.hasRunningCommands`, a process-tree walk, and 2026.2 platforms
@@ -299,8 +305,16 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
 - Each session's tab is an `OnePixelSplitter`: terminal on top (~80%), `ChangedFilesPanel`
   below. The panel is **hidden until the session's first file change** and can be minimized
   to a thin strip; a red clear button empties the list.
-- **Detection is VFS-based and agent-agnostic** (`SessionFileChangeTracker`): a
-  `BulkFileListener` on the app message bus keeps only events with
+- **One listener per project.** `SessionChangeHub` holds the only `BulkFileListener` and
+  hands each batch to the live trackers. VFS events run on the EDT in a write action, and
+  the costly step, the VCS-ignore check, is the same for every session, so the hub
+  memoizes it per path per batch. Do not give trackers their own subscription again.
+- **Updates are coalesced and no-ops skipped.** A tracker queues at most one `onChanged`
+  at a time and snapshots when it runs. `ChangedFilesPanel.update` returns early on an
+  identical snapshot (the tracker also reports after every VCS update), and the tab is
+  only re-laid out when the list flips between empty and non-empty.
+- **Detection is VFS-based and agent-agnostic** (`SessionFileChangeTracker`): the hub's
+  `BulkFileListener` on the app message bus feeds it, and it keeps only events with
   `VFileEvent.isFromRefresh` — the file watcher reports *external* writes (the agent CLI)
   as refresh events, while the user's own editor saves/refactorings don't carry that flag
   and are excluded. Trade-off: any external writer during the session (another agent tab,
@@ -402,8 +416,10 @@ branches anywhere in here.
 - **Input never goes through `sendCommandToExecute`** (that submits a line). It uses the
   stdin write from §4.2 (`AgentInputWriter`: off the EDT, in send order).
   `AgentTerminalView.sendInput` queues text while the agent is still
-  starting and flushes it in `showTerminal()`, so invoking send-context against a cold dock
-  works without callers having to wait for readiness themselves.
+  starting and flushes it in `showTerminal()`. Before that there is no view at all: the
+  executable is resolved on a pooled thread, so a session just created (cold dock, or a
+  dock with no tabs) holds the text in `AgentSession.pendingInput` and hands it over when
+  the view is built. Callers never wait for readiness themselves.
 - **Attention is a quiet-period heuristic, by design.** Detecting "waiting for approval"
   exactly would mean parsing each agent's prompt — precisely the per-agent coupling this
   plugin avoids. Instead it watches the one agent-agnostic signal available: output stopped
@@ -433,10 +449,13 @@ branches anywhere in here.
   bounces the Dock icon for a muted or missed toast — that one *is* explicitly gated on
   `!Application.isActive`, since unlike `SystemNotifications` it would otherwise fire
   while the user is working in the IDE.
-- **It reuses the existing timer.** The check rides `AgentTerminalView`'s exit poll at
-  every 4th tick (~2s) rather than adding a second `Alarm`: unlike `isCommandRunning`, it
-  needs `getText()`, which materializes the whole scrollback and is too costly to run twice
-  a second for a session's lifetime. Keep it that way (§5, "mind the hot paths").
+- **It reuses the existing timer.** The check rides `AgentTerminalView`'s 2 s session
+  poll rather than adding a second `Alarm`. It needs the output length, and `getText()`
+  materializes the whole scrollback, so the view listens to the JediTerm buffer
+  (`TerminalTextBuffer.addModelListener`, a flag flip on the emulator thread) and only
+  calls `getText()` when something was written since the last check. The signal is still
+  the length, not the change event: switching it would make an agent that animates while
+  it waits look busy forever. Keep it that way (§5, "mind the hot paths").
 
 ---
 

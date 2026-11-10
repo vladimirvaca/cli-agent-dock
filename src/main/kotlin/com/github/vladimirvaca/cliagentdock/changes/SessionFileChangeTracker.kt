@@ -14,11 +14,8 @@ import com.intellij.openapi.vcs.actions.VcsContextFactory
 import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
-import com.intellij.openapi.vcs.changes.VcsIgnoreManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.RefreshQueue
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileCopyEvent
@@ -56,23 +53,25 @@ data class ChangedFile(val path: String, val kind: ChangeKind)
  * commit (or revert) looks like from here — are pruned, so committing the session's
  * changes clears the panel without anyone pressing the clear button.
  *
- * The listener lives on the application message bus scoped to [parentDisposable], so it
- * stops with the session (close or restart). [onChanged] receives the full cumulative
- * snapshot after every change, always on the EDT and never after disposal.
+ * VFS events arrive through the project's [SessionChangeHub] — one listener however many
+ * sessions are open — for as long as [parentDisposable] lives, so tracking stops with the
+ * session (close or restart). [onChanged] receives the full cumulative snapshot after
+ * changes, always on the EDT and never after disposal; a burst of changes is coalesced
+ * into one call.
  */
 class SessionFileChangeTracker(
     private val project: Project,
     basePath: String,
     parentDisposable: Disposable,
     private val onChanged: (List<ChangedFile>) -> Unit,
-) : BulkFileListener {
+) {
 
     private val basePath = FileUtil.toSystemIndependentName(basePath)
 
-    // Fetched once: [isTracked] runs per VFS event on the EDT inside a write action,
-    // so the hot path shouldn't pay two service lookups per file.
-    private val vcsIgnoreManager = VcsIgnoreManager.getInstance(project)
     private val vcsContextFactory = VcsContextFactory.getInstance()
+
+    /** True while an [onChanged] call is queued; see [fireChanged]. */
+    private var notifyQueued = false
 
     /** Wall-clock start of the session; anything on disk older than this predates it. */
     private val sessionStartMillis = System.currentTimeMillis()
@@ -122,9 +121,7 @@ class SessionFileChangeTracker(
     /** Runs on the EDT (refresh finish action), as does disposal, so the guard is race-free. */
     private fun start(parentDisposable: Disposable) {
         if (disposed) return
-        ApplicationManager.getApplication().messageBus
-            .connect(parentDisposable)
-            .subscribe(VirtualFileManager.VFS_CHANGES, this)
+        SessionChangeHub.getInstance(project).register(this, parentDisposable)
         // changeListUpdateDone fires (on the CLM update thread) after the VCS finished
         // rescanning — the moment a commit's effect is actually visible to us.
         ChangeListManager.getInstance(project).addChangeListListener(
@@ -222,32 +219,37 @@ class SessionFileChangeTracker(
         }
     }
 
-    override fun after(events: List<VFileEvent>) {
+    /**
+     * Called by [SessionChangeHub] with one VFS batch, on the EDT inside a write action.
+     * [isIgnored] is the hub's VCS-ignore check, memoized for the batch so several
+     * sessions don't each pay for the same path.
+     */
+    internal fun onVfsEvents(events: List<VFileEvent>, isIgnored: (String) -> Boolean) {
         var updated = false
         for (event in events) {
             // Refresh events are how the file watcher reports external writes; everything
             // else (editor saves, IDE-side refactorings) is the user's own doing.
             if (!event.isFromRefresh) continue
-            updated = apply(event) || updated
+            updated = apply(event, isIgnored) || updated
         }
         if (updated) fireChanged()
     }
 
-    private fun apply(event: VFileEvent): Boolean = when (event) {
+    private fun apply(event: VFileEvent, isIgnored: (String) -> Boolean): Boolean = when (event) {
         is VFileCreateEvent ->
-            !event.isDirectory && !predatesSession(event.file) && record(event.path, ChangeKind.CREATED)
-        is VFileCopyEvent -> record(event.path, ChangeKind.CREATED)
+            !event.isDirectory && !predatesSession(event.file) && record(event.path, ChangeKind.CREATED, isIgnored)
+        is VFileCopyEvent -> record(event.path, ChangeKind.CREATED, isIgnored)
         is VFileContentChangeEvent ->
-            !predatesSession(event.file) && record(event.path, ChangeKind.MODIFIED)
-        is VFileDeleteEvent -> !event.file.isDirectory && record(event.path, ChangeKind.DELETED)
-        is VFileMoveEvent -> recordMoved(event.oldPath, event.path)
+            !predatesSession(event.file) && record(event.path, ChangeKind.MODIFIED, isIgnored)
+        is VFileDeleteEvent -> !event.file.isDirectory && record(event.path, ChangeKind.DELETED, isIgnored)
+        is VFileMoveEvent -> recordMoved(event.oldPath, event.path, isIgnored)
         is VFilePropertyChangeEvent ->
-            event.propertyName == VirtualFile.PROP_NAME && recordMoved(event.oldPath, event.path)
+            event.propertyName == VirtualFile.PROP_NAME && recordMoved(event.oldPath, event.path, isIgnored)
         else -> false
     }
 
-    private fun record(path: String, incoming: ChangeKind): Boolean {
-        if (!isTracked(path)) return false
+    private fun record(path: String, incoming: ChangeKind, isIgnored: (String) -> Boolean): Boolean {
+        if (!isTracked(path, isIgnored)) return false
         val merged = merge(changes[path]?.kind, incoming)
         if (merged == null) changes.remove(path) else changes[path] = ChangedFile(path, merged)
         // A file that exists again (recreated after a delete) starts a fresh VCS story.
@@ -256,16 +258,16 @@ class SessionFileChangeTracker(
     }
 
     /** A rename/move shows up under the new path, keeping what we knew about the old one. */
-    private fun recordMoved(oldPath: String, newPath: String): Boolean {
+    private fun recordMoved(oldPath: String, newPath: String, isIgnored: (String) -> Boolean): Boolean {
         val prior = changes.remove(oldPath)
         return when {
-            isTracked(newPath) -> {
+            isTracked(newPath, isIgnored) -> {
                 changes[newPath] = ChangedFile(newPath, prior?.kind ?: ChangeKind.MODIFIED)
                 true
             }
             // Moved out of the project: gone from the project's point of view, unless the
             // session itself created it (then created+removed nets out to nothing).
-            isTracked(oldPath) && prior?.kind != ChangeKind.CREATED -> {
+            isTracked(oldPath, isIgnored) && prior?.kind != ChangeKind.CREATED -> {
                 changes[oldPath] = ChangedFile(oldPath, ChangeKind.DELETED)
                 true
             }
@@ -292,23 +294,33 @@ class SessionFileChangeTracker(
      * Inside the tracked root, not git bookkeeping, and not VCS-ignored. Ignored files
      * (build output, caches — whatever .gitignore and the IDE's ignore providers
      * cover) are side effects of the agent's work, not reviewable work, so they never
-     * enter the list. The pattern check works on a bare path, which matters here: at
-     * event time a created file may not be in the VFS yet and a deleted one is already
-     * gone. It is fast-but-approximate by contract; [pruneCommitted] holds the precise
-     * complement, dropping entries the VCS itself later reports as ignored.
+     * enter the list. The ignore check ([SessionChangeHub]) is fast-but-approximate by
+     * contract; [pruneCommitted] holds the precise complement, dropping entries the VCS
+     * itself later reports as ignored. It runs last, after the cheap string checks.
      */
-    private fun isTracked(path: String): Boolean =
+    private fun isTracked(path: String, isIgnored: (String) -> Boolean): Boolean =
         FileUtil.isAncestor(basePath, path, true) &&
             !path.contains("/.git/") && !path.endsWith("/.git") &&
-            !vcsIgnoreManager.isPotentiallyIgnoredFile(vcsContextFactory.createFilePath(path, false))
+            !isIgnored(path)
 
+    /**
+     * Queues one [onChanged] call. VFS events arrive on the EDT inside a write action, so
+     * the call hops out of it before touching Swing, and is dropped if the session was
+     * disposed meanwhile. A refresh delivers a big change as many batches; while a call
+     * is already queued further ones fold into it, and the snapshot is taken when it
+     * runs, so the listener sees the latest state once instead of every step. Callers
+     * are all on the EDT, so a plain flag is enough.
+     */
     private fun fireChanged() {
-        val snapshot = changes.values.toList()
-        thisLogger().debug("Session changed files updated: ${snapshot.size} entries")
-        // VFS events arrive on the EDT inside a write action; hop out of it before
-        // touching Swing, and drop the update if the session was disposed meanwhile.
+        if (notifyQueued) return
+        notifyQueued = true
         ApplicationManager.getApplication().invokeLater(
-            { onChanged(snapshot) },
+            {
+                notifyQueued = false
+                val snapshot = changes.values.toList()
+                thisLogger().debug("Session changed files updated: ${snapshot.size} entries")
+                onChanged(snapshot)
+            },
             { disposed },
         )
     }
