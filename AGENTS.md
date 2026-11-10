@@ -162,6 +162,8 @@ ui/
 
 terminal/
   AgentTerminalRunner.kt         Creates the embedded terminal and sends the agent command.
+  AgentInputWriter.kt            The one way to type into the agent's stdin: off the EDT, in
+                                 order (§4.2).
   AgentTerminalView.kt           CardLayout: loading spinner until the agent is ready,
                                  then the terminal card. Also owns sendInput() (types into
                                  the agent without submitting, queued until ready) and
@@ -200,12 +202,19 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
     ends; the deterministic signal for auto-closing the tab (§4.4). Prefer it over
     `widget.isCommandRunning()`, whose interface **default just returns `false`** (verified
     by decompilation) and is only meaningfully overridden by some concrete widgets.
-  - `widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(…) }` — writes raw
-    bytes/text to the agent's **stdin**, with no trailing newline, so it types into the
-    running agent instead of submitting a line. The accessor wraps a `CompletableFuture`,
-    so the lambda simply defers until the connector exists — no "is the terminal up yet"
-    handling needed. Used by `TerminalEscapeRouter` to deliver Esc. Note `writePlainMessage`
-    is *not* this: it paints text onto the display without touching stdin.
+  - **stdin writes** (raw bytes/text with no trailing newline, so it types into the
+    running agent instead of submitting a line) all go through `AgentInputWriter`, never
+    straight to the PTY from the EDT. On JediTerm widgets it uses
+    `terminalPanel.terminalOutputStream` (the `TerminalStarter`, reached without the
+    deprecated `JediTermWidget.getTerminalStarter()`), whose `sendBytes`/`sendString` only
+    enqueue onto JediTerm's single-threaded writer — the queue the user's own keystrokes
+    use. Otherwise it falls back to `widget.ttyConnectorAccessor.executeWithTtyConnector`.
+    That is a bare `CompletableFuture.thenAccept` (verified with javap), so once the
+    connector exists it writes **synchronously on the calling thread**. The writer therefore
+    chains each fallback write onto the previous one with `thenApplyAsync` on the
+    application pool, which keeps them in order and off the EDT. Used for send-context and
+    by `TerminalEscapeRouter` to deliver Esc. Note `writePlainMessage` is *not* this: it
+    paints text onto the display without touching stdin.
 - We start a normal shell and send the agent command to it (rather than replacing the
   shell with the agent) so the agent inherits the user's profile PATH/env, and stay
   cross-platform. The command is exit-wrapped so the shell ends with the agent (§4.4).
@@ -267,6 +276,14 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   several consecutive not-running samples before it closes: during shell boot the integration
   scripts register as a running command that goes idle before the queued agent command spawns,
   and a poll catching that gap used to close freshly opened tabs.
+- The poll ticks on the EDT (the attention check's `getText()` stays there), but the
+  `isCommandRunning()` probe itself runs on a **pooled thread**: the Terminal plugin answers
+  it with `TerminalUtil.hasRunningCommands`, a process-tree walk, and 2026.2 platforms
+  assert that it runs off the EDT and outside any read action (#21 — the Alarm's
+  write-intent context tripped both). The result hops back via `invokeLater`
+  (`ModalityState.any()`, dropped once the alarm is disposed), at most one probe is in
+  flight, and a probe that throws counts as no sample. The stop rule itself is the
+  platform-free `ExitConfirmation`, unit-tested.
 - `CliAgentDockToolWindowPanel.AgentSession` closes the tab on `onExit`, guarded by a
   `closed` flag (idempotent) and a `liveView` identity check so a **Restart** (which disposes
   the old view) doesn't let a stale termination callback close the restarted tab.
@@ -375,7 +392,8 @@ branches anywhere in here.
   agent would fetch anyway and throw away the surrounding file. It is inserted **without a
   newline** — the action supplies context, the user supplies intent.
 - **Input never goes through `sendCommandToExecute`** (that submits a line). It uses the
-  stdin write from §4.2. `AgentTerminalView.sendInput` queues text while the agent is still
+  stdin write from §4.2 (`AgentInputWriter`: off the EDT, in send order).
+  `AgentTerminalView.sendInput` queues text while the agent is still
   starting and flushes it in `showTerminal()`, so invoking send-context against a cold dock
   works without callers having to wait for readiness themselves.
 - **Attention is a quiet-period heuristic, by design.** Detecting "waiting for approval"
@@ -521,8 +539,8 @@ branches anywhere in here.
   reported these as *scheduled for removal* on IU-263, so they still work today but will
   not forever: `PathEnvironmentVariableUtil.findInPath(String)` (§4.6 leans on it heavily),
   `SimpleListCellRenderer.create(Customizer)` in `AgentComboBox`, the
-  `DynamicBundle(String)` constructor in `CliAgentDockBundle`, and the already-deprecated
-  `JediTermWidget.getTerminalStarter()` in `TerminalEscapeRouter`. The verifier verdict is
+  `DynamicBundle(String)` constructor in `CliAgentDockBundle`. (The already-deprecated
+  `JediTermWidget.getTerminalStarter()` was dropped for #21; see §4.2.) The verifier verdict is
   "Compatible" on every target IDE, so this is maintenance, not breakage.
 - README screenshot/GIF of the tool window in action (still a TODO in README.md) —
   probably the highest-leverage change for Marketplace conversion.

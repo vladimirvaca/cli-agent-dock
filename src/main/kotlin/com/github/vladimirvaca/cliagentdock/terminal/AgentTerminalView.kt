@@ -4,6 +4,8 @@ import com.github.vladimirvaca.cliagentdock.CliAgentDockBundle
 import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -55,6 +57,8 @@ class AgentTerminalView(
     private val cardLayout get() = layout as CardLayout
 
     private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable)
+    /** Every stdin write (context sends, Esc) goes through here: off the EDT, in order. */
+    private val input = AgentInputWriter(widget)
     private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("CliAgentDockStartup")
     private val loader = createLoaderPanel()
 
@@ -64,10 +68,13 @@ class AgentTerminalView(
 
     /** Guards [onExit] so the termination callback and the exit poll can't both fire it. */
     private var exitNotified = false
-    /** The exit poll only trusts a running->stopped transition after it first saw "running". */
-    private var sawCommandRunning = false
-    /** Consecutive not-running polls observed after [sawCommandRunning]; see [checkExit]. */
-    private var stoppedPolls = 0
+    /** Running->stopped bookkeeping for the exit poll; touched only on the EDT. */
+    private val exitConfirmation = ExitConfirmation(STOPPED_CONFIRM_POLLS)
+    /**
+     * True while a background isCommandRunning probe is outstanding, so a slow probe
+     * (it walks the process tree) never gets a second one stacked on top of it.
+     */
+    private var probeInFlight = false
 
     /** Counts exit polls so the attention check can run on a slower cadence; see [checkExit]. */
     private var exitPolls = 0
@@ -87,7 +94,7 @@ class AgentTerminalView(
 
         // Keep Esc inside the terminal (agents use it to interrupt); see the router
         // for the double-Esc / Shift+Esc ways to leave the dock by keyboard.
-        TerminalEscapeRouter.install(project, widget, parentDisposable)
+        TerminalEscapeRouter.install(project, widget, input, parentDisposable)
 
         add(widget.component, CARD_TERMINAL)
         add(loader, CARD_LOADING)
@@ -121,24 +128,57 @@ class AgentTerminalView(
      * only counts after [STOPPED_CONFIRM_POLLS] consecutive misses, so a momentary idle
      * blip (an agent with no ready markers still spawning after the shell prompt, or a
      * flaky isCommandRunning read) doesn't close a live tab.
+     *
+     * This tick runs on the EDT, but the isCommandRunning probe does not: the Terminal
+     * plugin answers it by walking the shell's process tree
+     * (`TerminalUtil.hasRunningCommands`), and from 2026.2 the platform asserts that runs
+     * on a background thread outside any read action (issue #21). The probe goes to a
+     * pooled thread and [onProbeResult] applies its answer back on the EDT; at most one
+     * probe is in flight at a time.
      */
     private fun checkExit() {
         if (exitNotified) return
-        if (widget.isCommandRunning()) {
-            sawCommandRunning = true
-            stoppedPolls = 0
-        } else if (sawCommandRunning && ++stoppedPolls >= STOPPED_CONFIRM_POLLS) {
-            // The agent was running and is now gone, but the shell is still alive.
-            notifyExit()
-            return
+        if (!probeInFlight) {
+            probeInFlight = true
+            ApplicationManager.getApplication().executeOnPooledThread(::probeCommandRunning)
         }
         // Attention rides this timer instead of adding a second one, but at a fraction of
         // its rate: unlike isCommandRunning, it needs getText(), which materializes the
         // whole scrollback — too costly to do twice a second for the life of a session.
+        // getText() reads the UI-side buffer, so it stays here on the EDT.
         if (++exitPolls % ATTENTION_EVERY_N_POLLS == 0) {
             attention?.onCheck(widget.getText())
         }
         scheduleExitCheck()
+    }
+
+    /** Pooled thread: probe the shell, then hop back to the EDT with the answer. */
+    private fun probeCommandRunning() {
+        val running = try {
+            widget.isCommandRunning()
+        } catch (e: Exception) {
+            // A session torn down mid-probe can throw from the connector. Report "no
+            // reading" rather than "stopped", so a failed probe can never close a tab.
+            thisLogger().debug("isCommandRunning probe failed", e)
+            null
+        }
+        // any(): the result only updates counters (onExit itself hops through a plain
+        // invokeLater), and it must not sit behind a modal dialog while probeInFlight
+        // holds back every further probe. The alarm shares the view's lifetime, so a
+        // disposed alarm means the session is gone and the result is dropped.
+        ApplicationManager.getApplication().invokeLater(
+            { onProbeResult(running) },
+            ModalityState.any(),
+        ) { alarm.isDisposed }
+    }
+
+    private fun onProbeResult(running: Boolean?) {
+        probeInFlight = false
+        if (exitNotified || running == null) return
+        if (exitConfirmation.onSample(running)) {
+            // The agent was running and is now gone, but the shell is still alive.
+            notifyExit()
+        }
     }
 
     /**
@@ -156,12 +196,12 @@ class AgentTerminalView(
 
     /**
      * Writes straight to the agent's stdin. `sendCommandToExecute` would append a newline
-     * and run the line, which is the opposite of what the context actions want; the
-     * connector accessor defers until the PTY exists, so no readiness check is needed
-     * beyond the queueing above. See AGENTS.md §4.2.
+     * and run the line, which is the opposite of what the context actions want.
+     * [AgentInputWriter] does the PTY write off the EDT and keeps writes in order.
+     * See AGENTS.md §4.2.
      */
     private fun writeToAgent(text: String) {
-        widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(text) }
+        input.send(text)
     }
 
     private fun notifyExit() {
@@ -240,5 +280,27 @@ class AgentTerminalView(
         private const val ATTENTION_EVERY_N_POLLS = 4
         private const val CARD_TERMINAL = "terminal"
         private const val CARD_LOADING = "loading"
+    }
+}
+
+/**
+ * The exit poll's running->stopped rule, kept free of platform types so it can be tested
+ * directly. A stop only counts after the command was first seen running (so an
+ * isCommandRunning that always answers `false` never fires) and after
+ * [stoppedSamplesRequired] consecutive not-running samples (so one idle blip is ignored).
+ */
+internal class ExitConfirmation(private val stoppedSamplesRequired: Int) {
+
+    private var sawRunning = false
+    private var stoppedSamples = 0
+
+    /** Feeds one probe result; returns true exactly once, when the exit is confirmed. */
+    fun onSample(running: Boolean): Boolean {
+        if (running) {
+            sawRunning = true
+            stoppedSamples = 0
+            return false
+        }
+        return sawRunning && ++stoppedSamples == stoppedSamplesRequired
     }
 }

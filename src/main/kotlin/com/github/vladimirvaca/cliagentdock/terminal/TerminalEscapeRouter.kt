@@ -39,8 +39,7 @@ import javax.swing.KeyStroke
  */
 class TerminalEscapeRouter private constructor(
     private val project: Project,
-    private val widget: TerminalWidget,
-    private val jediWidget: JBTerminalWidget?,
+    private val input: AgentInputWriter,
 ) {
 
     /** Timestamp of the last plain-Esc press routed to the agent; 0 when none is pending. */
@@ -68,13 +67,9 @@ class TerminalEscapeRouter private constructor(
     }
 
     private fun sendEscToAgent() {
-        val starter = jediWidget?.terminalStarter
-        if (starter != null) {
-            // Same async user-input path JediTerm's own key handling uses.
-            starter.sendBytes(ESC_BYTES, true)
-        } else {
-            widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(ESC_BYTES) }
-        }
+        // On JediTerm widgets this is the same async user-input queue JediTerm's own key
+        // handling uses; either way the PTY write happens off the EDT.
+        input.send(ESC_BYTES)
     }
 
     /**
@@ -92,9 +87,14 @@ class TerminalEscapeRouter private constructor(
         private val DOUBLE_PRESS_WINDOW_NANOS = TimeUnit.MILLISECONDS.toNanos(DOUBLE_PRESS_WINDOW_MS)
         private val ESC_BYTES = byteArrayOf(0x1B)
 
-        fun install(project: Project, widget: TerminalWidget, parentDisposable: Disposable) {
+        internal fun install(
+            project: Project,
+            widget: TerminalWidget,
+            input: AgentInputWriter,
+            parentDisposable: Disposable,
+        ) {
             val jediWidget = JBTerminalWidget.asJediTermWidget(widget)
-            val router = TerminalEscapeRouter(project, widget, jediWidget)
+            val router = TerminalEscapeRouter(project, input)
             val panel = jediWidget?.terminalPanel as? JBTerminalPanel
             if (panel != null) {
                 panel.addPreKeyEventHandler(router::preHandleKeyEvent)
