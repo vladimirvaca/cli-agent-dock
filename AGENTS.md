@@ -278,6 +278,10 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   Git Bash — robust for Ctrl+C, preserves the already-sourced env), `& <cmd>; exit` for
   PowerShell, `<cmd> & exit` for cmd.exe. An unrecognized shell is left unwrapped (the old
   survive-the-agent behavior) so it degrades gracefully.
+- The shell path is read **off the EDT** (`AgentTerminalRunner.resolveShellPath`, on the
+  same pooled thread that resolves the executable) and passed into `launch`: from 2025.3
+  `TerminalProjectOptionsProvider.shellPath` blocks on a coroutine and throws on the EDT.
+  A failed read yields null, which is treated like an unrecognized shell.
 - `AgentTerminalView` takes an `onExit` callback fired **at most once, on the EDT**, from two
   sources: (1) the primary `addTerminationCallback`, and (2) a slow `isCommandRunning` poll
   as a best-effort net for an agent hard-killed before the trailing `exit` runs — guarded by

@@ -44,6 +44,8 @@ class AgentTerminalView(
     workingDirectory: String,
     private val agent: Agent,
     executable: File?,
+    /** The configured shell, read off the EDT by the owner; see [AgentTerminalRunner.resolveShellPath]. */
+    shellPath: String?,
     /**
      * Invoked once when the agent process ends (Ctrl+C, EOF, the agent's own quit command,
      * or a crash). The owner uses this to close the terminal tab. Guaranteed to fire at most
@@ -59,7 +61,7 @@ class AgentTerminalView(
 
     private val cardLayout get() = layout as CardLayout
 
-    private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable)
+    private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable, shellPath)
     /** Every stdin write (context sends, Esc) goes through here: off the EDT, in order. */
     private val input = AgentInputWriter(widget)
     private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("CliAgentDockStartup")
