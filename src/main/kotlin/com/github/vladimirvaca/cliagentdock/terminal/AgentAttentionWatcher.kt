@@ -36,16 +36,26 @@ class AgentAttentionWatcher(
 
     private val decider = AttentionDecider(IDLE_CHECKS_REQUIRED)
 
+    /** Focus state seen by the previous check: watching the session, IDE window active. */
+    private var lastFocusState: Pair<Boolean, Boolean>? = null
+
     /**
      * Call with the terminal's current output on each attention check. Cheap: only the
      * length is inspected, and [AgentTerminalView] throttles how often this runs because
      * materializing the whole scrollback is not free.
      */
     fun onCheck(output: CharSequence) {
+        val watching = isUserWatching()
+        // Track focus even while notifications are off, so re-enabling them mid-session
+        // doesn't read the first sample as a focus change.
+        val focusState = watching to ApplicationManager.getApplication().isActive
+        val focusChanged = lastFocusState != null && lastFocusState != focusState
+        lastFocusState = focusState
+
         // Checked per call rather than at construction so toggling the setting mid-session
         // takes effect immediately, matching how the changed-files toggle behaves.
         if (!AgentSettingsState.getInstance().notifyWhenAgentIdle) return
-        if (decider.onCheck(output.length, isUserWatching())) {
+        if (decider.onCheck(output.length, watching, focusChanged)) {
             notifyAttention()
         }
     }
@@ -106,19 +116,49 @@ class AgentAttentionWatcher(
  * re-arms it, so one notification per turn is the most that can be produced. Looking at
  * the dock marks the current output as seen, so merely having been away earlier does not
  * produce a stale notification later.
+ *
+ * Focus changes make agents' TUIs repaint: the terminal reports focus in/out and the
+ * agent redraws its screen, or the terminal re-lays out. That changes the buffer length
+ * without the agent doing anything, and used to re-arm the notice — so after an idle
+ * session had been announced or seen, simply switching to another app announced it
+ * again. So when focus changes while the agent is already quiet, changes in the next
+ * [settleChecks] checks only move the baseline. A real new turn keeps producing past
+ * that window and re-arms as usual.
  */
-internal class AttentionDecider(private val idleChecksRequired: Int) {
+internal class AttentionDecider(
+    private val idleChecksRequired: Int,
+    private val settleChecks: Int = DEFAULT_SETTLE_CHECKS,
+) {
 
     private var lastLength = UNSET
     private var idleChecks = 0
     private var outputSinceLastNotice = false
     private var alreadyNotified = false
 
-    /** @return true when the caller should raise an attention notice right now. */
-    fun onCheck(outputLength: Int, userIsWatching: Boolean): Boolean {
-        val grew = lastLength != UNSET && outputLength != lastLength
+    /** Consecutive checks with no output from the agent, watched or not. */
+    private var quietChecks = 0
+
+    /** Checks left in which a length change counts as a focus repaint, not new output. */
+    private var settleRemaining = 0
+
+    /**
+     * @param focusChanged the user's focus moved since the previous check (IDE window
+     *   activated/deactivated, dock or tab came into or out of view).
+     * @return true when the caller should raise an attention notice right now.
+     */
+    fun onCheck(outputLength: Int, userIsWatching: Boolean, focusChanged: Boolean = false): Boolean {
+        val changed = lastLength != UNSET && outputLength != lastLength
         val first = lastLength == UNSET
         lastLength = outputLength
+
+        if (focusChanged && quietChecks >= idleChecksRequired) settleRemaining = settleChecks
+        val settling = settleRemaining > 0
+        if (settling) settleRemaining--
+
+        // A change right after a focus change on an idle session is the TUI repainting:
+        // take it as the new baseline without re-arming, and keep counting it as quiet.
+        val grew = changed && !settling
+        if (!changed || settling) quietChecks++ else quietChecks = 0
 
         if (grew) {
             // The agent is actively producing; reset the quiet run and re-arm.
@@ -146,5 +186,8 @@ internal class AttentionDecider(private val idleChecksRequired: Int) {
 
     private companion object {
         private const val UNSET = -1
+
+        /** About 4 s at the attention cadence; a focus repaint lands within the first. */
+        private const val DEFAULT_SETTLE_CHECKS = 2
     }
 }
