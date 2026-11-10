@@ -2,6 +2,8 @@ package com.github.vladimirvaca.cliagentdock.terminal
 
 import com.github.vladimirvaca.cliagentdock.agent.Agent
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.terminal.ui.TerminalWidget
 import org.jetbrains.plugins.terminal.LocalTerminalDirectRunner
@@ -28,6 +30,8 @@ object AgentTerminalRunner {
      * @param workingDirectory directory the shell starts in (usually the project root).
      * @param executable resolved absolute path of the agent, launched directly so the
      *   shell's PATH is irrelevant; falls back to the bare command name when null.
+     * @param shellPath the configured shell, from [resolveShellPath]; null leaves the
+     *   command unwrapped.
      */
     fun launch(
         project: Project,
@@ -35,6 +39,7 @@ object AgentTerminalRunner {
         workingDirectory: String,
         agent: Agent,
         executable: File?,
+        shellPath: String?,
     ): TerminalWidget {
         val runner = LocalTerminalDirectRunner.createTerminalRunner(project)
         val options = ShellStartupOptions.Builder()
@@ -44,9 +49,27 @@ object AgentTerminalRunner {
         // deferSessionStartUntilUiShown = false: start the shell eagerly so the agent
         // can boot while it is still hidden behind the loader (see AgentTerminalView).
         val widget = runner.startShellTerminalWidget(parentDisposable, options, false)
-        widget.sendCommandToExecute(exitWrappedCommand(project, agent.commandLineFor(executable)))
+        widget.sendCommandToExecute(exitWrappedCommand(shellPath, agent.commandLineFor(executable)))
         return widget
     }
+
+    /**
+     * The shell the Terminal plugin will start, used to pick the exit wrap.
+     *
+     * **Call from a background thread.** From 2025.3 `TerminalProjectOptionsProvider.shellPath`
+     * blocks on a coroutine (it may probe the system for a default shell) and throws on
+     * the EDT. Returns null when it cannot be read; the command is then left unwrapped,
+     * the same graceful fallback as an unrecognized shell.
+     */
+    fun resolveShellPath(project: Project): String? =
+        try {
+            TerminalProjectOptionsProvider.getInstance(project).shellPath
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            thisLogger().warn("Could not read the terminal shell path; the agent command is left unwrapped", e)
+            null
+        }
 
     /**
      * Wraps the agent command so the hosting shell terminates when the agent exits, no
@@ -64,8 +87,8 @@ object AgentTerminalRunner {
      * If the shell can't be identified we fall back to the bare command (previous behavior:
      * the shell survives), so an unknown shell degrades gracefully instead of misbehaving.
      */
-    private fun exitWrappedCommand(project: Project, command: String): String =
-        when (shellFamily(project)) {
+    private fun exitWrappedCommand(shellPath: String?, command: String): String =
+        when (shellFamily(shellPath)) {
             ShellFamily.POSIX -> "exec $command"
             ShellFamily.POWERSHELL -> "& $command; exit"
             ShellFamily.CMD -> "$command & exit"
@@ -74,8 +97,8 @@ object AgentTerminalRunner {
 
     private enum class ShellFamily { POSIX, POWERSHELL, CMD, UNKNOWN }
 
-    private fun shellFamily(project: Project): ShellFamily {
-        val shellPath = TerminalProjectOptionsProvider.getInstance(project).shellPath
+    private fun shellFamily(shellPath: String?): ShellFamily {
+        if (shellPath == null) return ShellFamily.UNKNOWN
         // Compare on the lowercased executable name so full paths and .exe suffixes match.
         val name = shellPath.replace('\\', '/').substringAfterLast('/').lowercase(Locale.ROOT)
         return when {

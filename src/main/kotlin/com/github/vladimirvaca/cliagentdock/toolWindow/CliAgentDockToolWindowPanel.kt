@@ -9,6 +9,7 @@ import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsConfigurable
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsListener
 import com.github.vladimirvaca.cliagentdock.settings.AgentSettingsState
 import com.github.vladimirvaca.cliagentdock.terminal.AgentAttentionWatcher
+import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalRunner
 import com.github.vladimirvaca.cliagentdock.terminal.AgentTerminalView
 import com.github.vladimirvaca.cliagentdock.ui.AgentIcons
 import com.github.vladimirvaca.cliagentdock.ui.agentComboBox
@@ -386,6 +387,9 @@ class CliAgentDockToolWindowPanel(
             resolving = true
             ApplicationManager.getApplication().executeOnPooledThread {
                 val executable = AgentExecutableResolver.resolve(agent)
+                // Also read here, off the EDT: from 2025.3 the Terminal plugin's shell
+                // path getter blocks and is forbidden on the EDT.
+                val shellPath = executable?.let { AgentTerminalRunner.resolveShellPath(project) }
                 ApplicationManager.getApplication().invokeLater(
                     {
                         resolving = false
@@ -394,7 +398,7 @@ class CliAgentDockToolWindowPanel(
                             pendingInput = null
                             createNotFoundPanel(agent, onRetry = ::restart)
                         } else {
-                            createTerminalContent(sessionDisposable, executable)
+                            createTerminalContent(sessionDisposable, executable, shellPath)
                         }
                         container.addToCenter(content)
                         container.revalidate()
@@ -407,7 +411,11 @@ class CliAgentDockToolWindowPanel(
         }
 
         /** The live terminal plus the session's changed-files tracking, wired together. */
-        private fun createTerminalContent(sessionDisposable: Disposable, executable: File): JComponent {
+        private fun createTerminalContent(
+            sessionDisposable: Disposable,
+            executable: File,
+            shellPath: String?,
+        ): JComponent {
             val workingDir = project.basePath ?: System.getProperty("user.home")
             // "Watching" means the dock is in front of the user (visible, IDE focused) *and*
             // this session's tab is the one on screen. A background tab finishing while the
@@ -428,7 +436,7 @@ class CliAgentDockToolWindowPanel(
             )
             lateinit var view: AgentTerminalView
             view = AgentTerminalView(
-                project, sessionDisposable, workingDir, agent, executable,
+                project, sessionDisposable, workingDir, agent, executable, shellPath,
                 onExit = {
                     // Only the current view may close the tab; a replaced (restarted) view's exit is stale.
                     if (liveView === view) close()
