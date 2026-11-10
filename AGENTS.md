@@ -267,6 +267,14 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   several consecutive not-running samples before it closes: during shell boot the integration
   scripts register as a running command that goes idle before the queued agent command spawns,
   and a poll catching that gap used to close freshly opened tabs.
+- The poll ticks on the EDT (the attention check's `getText()` stays there), but the
+  `isCommandRunning()` probe itself runs on a **pooled thread**: the Terminal plugin answers
+  it with `TerminalUtil.hasRunningCommands`, a process-tree walk, and 2026.2 platforms
+  assert that it runs off the EDT and outside any read action (#21 — the Alarm's
+  write-intent context tripped both). The result hops back via `invokeLater`
+  (`ModalityState.any()`, dropped once the alarm is disposed), at most one probe is in
+  flight, and a probe that throws counts as no sample. The stop rule itself is the
+  platform-free `ExitConfirmation`, unit-tested.
 - `CliAgentDockToolWindowPanel.AgentSession` closes the tab on `onExit`, guarded by a
   `closed` flag (idempotent) and a `liveView` identity check so a **Restart** (which disposes
   the old view) doesn't let a stale termination callback close the restarted tab.

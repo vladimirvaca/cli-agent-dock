@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more "Must not execute inside read action" / "Access from Event Dispatch Thread (EDT) is not allowed" errors on 2026.2 IDEs** — the dock's background check for an agent that exited without closing its shell asked the terminal whether a command was still running from the UI thread. From 2026.2 (e.g. Rider 2026.2.4.1) the platform requires that check to run on a background thread, and reported an IDE error whenever it didn't — often while you were opening a diff from the Files changed panel. The check now runs in the background. ([#21](https://github.com/vladimirvaca/cli-agent-dock/issues/21))
+
 ## [0.7.0] - 2026-11-05
 
 ### Added
