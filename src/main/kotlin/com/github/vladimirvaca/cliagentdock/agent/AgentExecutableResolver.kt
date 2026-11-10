@@ -77,7 +77,7 @@ object AgentExecutableResolver {
             // Dirs the agents' own install scripts target on every OS. They write
             // POSIX-style paths under $HOME, so they show up on Windows too whenever the
             // script was run from Git Bash or WSL.
-            add(File(home, ".local/bin"))       // Claude Code; Codex (install.sh)
+            add(File(home, ".local/bin"))       // Claude Code; Codex and Cursor CLI (install.sh)
             add(File(home, "bin"))              // OpenCode's first choice
             add(File(home, ".opencode/bin"))    // OpenCode's fallback
             add(File(home, ".bun/bin"))         // `bun install -g`
@@ -87,6 +87,8 @@ object AgentExecutableResolver {
                     add(File(localAppData, "Programs"))
                     // Codex's Windows installer (install.ps1).
                     add(File(localAppData, "Programs\\OpenAI\\Codex\\bin"))
+                    // Cursor CLI's Windows installer (cursor-agent.cmd sits at the root).
+                    add(File(localAppData, "cursor-agent"))
                     // WinGet installs: the Links shim dir, plus each portable package's
                     // own directory. Tools like GitHub Copilot CLI drop copilot.exe
                     // straight into Packages\<id>\ and add that dir (not Links) to PATH,

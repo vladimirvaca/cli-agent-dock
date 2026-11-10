@@ -23,6 +23,7 @@ object AgentIcons {
         "github-copilot" to "/icons/agents/githubCopilot.svg",
         "openai-codex" to "/icons/agents/openaiCodex.svg",
         "opencode" to "/icons/agents/opencode.svg",
+        "cursor-cli" to "/icons/agents/cursorCli.svg",
     )
 
     private val icons: Map<String, Icon> =

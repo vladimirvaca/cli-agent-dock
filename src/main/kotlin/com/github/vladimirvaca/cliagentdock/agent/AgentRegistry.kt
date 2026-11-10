@@ -60,6 +60,26 @@ object AgentRegistry {
             // only exists on 2.x and is harmless redundancy on 1.x.
             readyMarkers = listOf("Ask anything", "/ for commands"),
         ),
+        Agent(
+            id = "cursor-cli",
+            displayName = "Cursor CLI",
+            // Installed by https://cursor.com/install as both `agent` (the documented name)
+            // and `cursor-agent`. We launch `cursor-agent`: `agent` is generic enough that a
+            // PATH lookup could resolve some unrelated tool. install.sh symlinks it into
+            // ~/.local/bin; the Windows installer (install?win32=true) drops
+            // cursor-agent.cmd/.ps1 into %LOCALAPPDATA%\cursor-agent — there is no .exe,
+            // so the .cmd is what AgentExecutableResolver picks.
+            command = "cursor-agent",
+            // The composer placeholder: "Plan, search, build anything" on a fresh session,
+            // "Add a follow-up" once it has messages (e.g. resumed). Both are only drawn
+            // with the input box, and neither is in the launch path (…\cursor-agent.cmd).
+            // "Cursor Agent" is deliberately NOT a marker: the CLI also prints it on its
+            // startup splash and in "Updating Cursor Agent...", both before it is usable.
+            // "Press any key to log in" is the signed-out screen, which needs the user's
+            // keypress just as much, so it reveals the terminal instead of waiting out the
+            // timeout. Checked against the 2026.11.05-86047df package.
+            readyMarkers = listOf("Plan, search, build anything", "Add a follow-up", "Press any key to log in"),
+        ),
     )
 
     /** Agents the user can currently select. */

@@ -18,7 +18,7 @@ terminal already running a **coding agent CLI**.
 - **Multiplatform:** must work on **Windows, macOS, and Linux**.
 
 The long-term vision is a *hub* for many agents. Claude Code, GitHub Copilot CLI,
-OpenAI Codex CLI and OpenCode all work end-to-end; the architecture is generalized so a
+OpenAI Codex CLI, OpenCode and Cursor CLI all work end-to-end; the architecture is generalized so a
 new agent is a registry entry, not new plumbing. Beyond launching the CLI, the plugin
 adds IDE-side value around it — today, a live per-session **Files changed** panel with
 one-click diffs (§4.5).
@@ -63,8 +63,8 @@ What's shipped, in order of arrival:
   Gradle task and a CI split that keeps the Plugin Verifier's IDEs out of the Actions
   cache (§7).
 
-**Current focus:** the "Later" ledger in §7. The agent catalog is four entries deep (Claude
-Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode) and broadening it further is
+**Current focus:** the "Later" ledger in §7. The agent catalog is five entries deep (Claude
+Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, Cursor CLI) and broadening it further is
 explicitly *not* the priority; cross-agent IDE integration is, since that is what an
 official single-vendor plugin structurally cannot match. The nearest candidates are
 per-agent config (`Agent.args` already exists and is unused), custom agents, and a
@@ -148,7 +148,7 @@ agent/
                                  readyMarkers, readyTimeoutMs. Builds the launch command
                                  line (absolute path, quoted if needed).
   AgentRegistry.kt               Known agents (Claude Code — the default — GitHub Copilot
-                                 CLI, OpenAI Codex CLI, OpenCode), all enabled. Entries
+                                 CLI, OpenAI Codex CLI, OpenCode, Cursor CLI), all enabled. Entries
                                  carry a per-agent install-location and readyMarkers note.
   AgentExecutableResolver.kt     Resolves the executable via PATH + well-known install dirs.
                                  Successful lookups are cached (one stat on a hit); misses
@@ -250,6 +250,13 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
     `Ask anything... "<rotating example>"` on 1.x — so the marker is the shared prefix,
     with the ellipsis left out because the TUI renders `"..."` instead of `"…"` in mono
     mode. The second marker is 2.x-only and harmless redundancy on 1.x.
+  - Cursor CLI: `"Plan, search, build anything"`, `"Add a follow-up"` — the composer
+    placeholder on a fresh and on a resumed session — plus `"Press any key to log in"`,
+    the signed-out screen, so a logged-out user isn't left behind the spinner. Launched as `cursor-agent` rather
+    than its generic `agent` alias, which a PATH lookup could confuse with another tool.
+    `"Cursor Agent"` is **not** a marker: it is also on the startup splash and in
+    `"Updating Cursor Agent..."`, both painted before the CLI is usable. Taken from the
+    shipped JS bundle (package `2026.11.05-86047df`).
 - Markers can be sanity-checked against an installed CLI by grepping its binary
   (`grep -a -F "<marker>" codex.exe`), but **absence there does not mean absence on
   screen**: TUIs compose footers from separate styled spans, so Codex's
@@ -333,12 +340,13 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   embedded terminal exits immediately. The bare name stays last for POSIX shells like
   Git Bash, which can run it. The dir list is driven by where the agents' own installers
   write:
-  - every OS — `~/.local/bin` (Claude Code, Codex `install.sh`), `~/bin` and
+  - every OS — `~/.local/bin` (Claude Code, Codex and Cursor CLI `install.sh`), `~/bin` and
     `~/.opencode/bin` (the OpenCode install script's first choice and its fallback),
     `~/.bun/bin` (`bun install -g`). These are checked on Windows too, since the scripts
     write POSIX-style `$HOME` paths when run from Git Bash or WSL.
   - Windows — `%APPDATA%\npm`, `%LOCALAPPDATA%\Programs`,
-    `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (Codex `install.ps1`), the WinGet `Links`
+    `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (Codex `install.ps1`),
+    `%LOCALAPPDATA%\cursor-agent` (Cursor CLI's installer; `.cmd`/`.ps1` only, no `.exe`), the WinGet `Links`
     shim dir + each `WinGet\Packages\<id>\` portable-package dir, `~\scoop\shims`,
     `%ProgramData%\chocolatey\bin`.
   - macOS/Linux — `/usr/local/bin`, `/opt/homebrew/bin`,
@@ -452,7 +460,8 @@ branches anywhere in here.
   attribute of the `<toolWindow>` element. The purple branding lives only in the
   Marketplace/Settings plugin icon (`META-INF/pluginIcon.svg` + `_dark`).
 - Per-agent icons: `16x16` SVGs under `icons/agents/` (`claudeCode.svg`, plus
-  `githubCopilot.svg`, `openaiCodex.svg` and `opencode.svg` with `_dark` variants),
+  `githubCopilot.svg`, `openaiCodex.svg`, `opencode.svg` and `cursorCli.svg` with `_dark`
+  variants),
   loaded through `AgentIcons` (§4). A new agent without art falls back to a generic
   console icon. The monochrome ones use the platform's neutral strokes — `#6C707E`
   light, `#CED0D6` dark; only Claude Code carries a brand color. `AgentIcons.resourcePaths`
@@ -527,7 +536,7 @@ branches anywhere in here.
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
   entry uses it yet, so this is mostly a settings UI.
-- Custom/user-defined agents; more built-ins (Gemini CLI, Cursor CLI, Amp, Aider).
+- Custom/user-defined agents; more built-ins (Gemini CLI, Amp, Aider).
 - Per-project preferred-agent override, falling back to the application-level setting.
 - Live relaunch when the preferred agent changes in Settings (the `AgentSettingsListener`
   topic added in v0.4.0 already provides the publish point).
