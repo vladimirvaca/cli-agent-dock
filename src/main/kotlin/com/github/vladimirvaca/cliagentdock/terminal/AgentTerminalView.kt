@@ -57,6 +57,8 @@ class AgentTerminalView(
     private val cardLayout get() = layout as CardLayout
 
     private val widget = AgentTerminalRunner.launch(project, parentDisposable, workingDirectory, agent, executable)
+    /** Every stdin write (context sends, Esc) goes through here: off the EDT, in order. */
+    private val input = AgentInputWriter(widget)
     private val spinner: AnimatedIcon = AsyncProcessIcon.createBig("CliAgentDockStartup")
     private val loader = createLoaderPanel()
 
@@ -92,7 +94,7 @@ class AgentTerminalView(
 
         // Keep Esc inside the terminal (agents use it to interrupt); see the router
         // for the double-Esc / Shift+Esc ways to leave the dock by keyboard.
-        TerminalEscapeRouter.install(project, widget, parentDisposable)
+        TerminalEscapeRouter.install(project, widget, input, parentDisposable)
 
         add(widget.component, CARD_TERMINAL)
         add(loader, CARD_LOADING)
@@ -194,12 +196,12 @@ class AgentTerminalView(
 
     /**
      * Writes straight to the agent's stdin. `sendCommandToExecute` would append a newline
-     * and run the line, which is the opposite of what the context actions want; the
-     * connector accessor defers until the PTY exists, so no readiness check is needed
-     * beyond the queueing above. See AGENTS.md §4.2.
+     * and run the line, which is the opposite of what the context actions want.
+     * [AgentInputWriter] does the PTY write off the EDT and keeps writes in order.
+     * See AGENTS.md §4.2.
      */
     private fun writeToAgent(text: String) {
-        widget.ttyConnectorAccessor.executeWithTtyConnector { it.write(text) }
+        input.send(text)
     }
 
     private fun notifyExit() {
