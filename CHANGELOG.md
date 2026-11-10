@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
 ### Added
 
 - **Cursor CLI support** — pick **Cursor CLI** in the agent dropdown to run Cursor's `cursor-agent` in the dock, with the same loading spinner, tabs, Files changed panel and notifications as the other agents. The dock finds it where Cursor's installer puts it: `~/.local/bin` on macOS/Linux and `%LOCALAPPDATA%\cursor-agent` on Windows.
@@ -111,7 +113,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.4.0...v0.5.0
