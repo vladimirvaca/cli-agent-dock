@@ -40,11 +40,11 @@ class AgentAttentionWatcher(
     private var lastFocusState: Pair<Boolean, Boolean>? = null
 
     /**
-     * Call with the terminal's current output on each attention check. Cheap: only the
-     * length is inspected, and [AgentTerminalView] throttles how often this runs because
-     * materializing the whole scrollback is not free.
+     * Call with the length of the terminal's current output on each attention check.
+     * [AgentTerminalView] supplies it, and only re-reads the terminal when its buffer
+     * reported a change.
      */
-    fun onCheck(output: CharSequence) {
+    fun onCheck(outputLength: Int) {
         val watching = isUserWatching()
         // Track focus even while notifications are off, so re-enabling them mid-session
         // doesn't read the first sample as a focus change.
@@ -55,7 +55,7 @@ class AgentAttentionWatcher(
         // Checked per call rather than at construction so toggling the setting mid-session
         // takes effect immediately, matching how the changed-files toggle behaves.
         if (!AgentSettingsState.getInstance().notifyWhenAgentIdle) return
-        if (decider.onCheck(output.length, watching, focusChanged)) {
+        if (decider.onCheck(outputLength, watching, focusChanged)) {
             notifyAttention()
         }
     }

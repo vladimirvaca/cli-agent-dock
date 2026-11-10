@@ -9,6 +9,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.terminal.JBTerminalWidget
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.Alarm
@@ -16,11 +17,13 @@ import com.intellij.util.ui.AnimatedIcon
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.jediterm.terminal.model.TerminalModelListener
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.SwingConstants
@@ -76,8 +79,18 @@ class AgentTerminalView(
      */
     private var probeInFlight = false
 
-    /** Counts exit polls so the attention check can run on a slower cadence; see [checkExit]. */
-    private var exitPolls = 0
+    /**
+     * The JediTerm buffer behind the widget, or null for any other kind of widget. Its
+     * change events let [outputLength] skip rebuilding the scrollback while nothing was
+     * written.
+     */
+    private val textBuffer = JBTerminalWidget.asJediTermWidget(widget)?.terminalTextBuffer
+
+    /** Set from the terminal's emulator thread whenever the buffer changes. */
+    private val outputDirty = AtomicBoolean(true)
+
+    /** Length of the terminal text as of the last time it was read; EDT only. */
+    private var lastOutputLength = 0
 
     /** True once the terminal card is showing, i.e. the agent is up and can accept input. */
     private var revealed = false
@@ -107,6 +120,13 @@ class AgentTerminalView(
         // that gap read it as the agent exiting and closed a freshly opened tab.
         widget.addTerminationCallback({ notifyExit() }, parentDisposable)
 
+        textBuffer?.let { buffer ->
+            // Called on the emulator thread for every write, so it only flips a flag.
+            val listener = TerminalModelListener { outputDirty.set(true) }
+            buffer.addModelListener(listener)
+            Disposer.register(parentDisposable) { buffer.removeModelListener(listener) }
+        }
+
         if (agent.readyMarkers.isEmpty()) {
             // Readiness cannot be detected for this agent; show the terminal directly.
             showTerminal()
@@ -118,7 +138,7 @@ class AgentTerminalView(
     }
 
     private fun scheduleExitCheck() {
-        alarm.addRequest(::checkExit, EXIT_POLL_INTERVAL_MS)
+        alarm.addRequest(::checkExit, SESSION_POLL_INTERVAL_MS)
     }
 
     /**
@@ -135,6 +155,10 @@ class AgentTerminalView(
      * on a background thread outside any read action (issue #21). The probe goes to a
      * pooled thread and [onProbeResult] applies its answer back on the EDT; at most one
      * probe is in flight at a time.
+     *
+     * The tick is deliberately slow ([SESSION_POLL_INTERVAL_MS]). On macOS and Linux each
+     * probe starts a `ps` process, and this runs for the whole life of every session,
+     * while the deterministic close comes from the termination callback anyway.
      */
     private fun checkExit() {
         if (exitNotified) return
@@ -142,14 +166,26 @@ class AgentTerminalView(
             probeInFlight = true
             ApplicationManager.getApplication().executeOnPooledThread(::probeCommandRunning)
         }
-        // Attention rides this timer instead of adding a second one, but at a fraction of
-        // its rate: unlike isCommandRunning, it needs getText(), which materializes the
-        // whole scrollback — too costly to do twice a second for the life of a session.
-        // getText() reads the UI-side buffer, so it stays here on the EDT.
-        if (++exitPolls % ATTENTION_EVERY_N_POLLS == 0) {
-            attention?.onCheck(widget.getText())
-        }
+        // Attention rides this timer instead of adding a second one.
+        attention?.onCheck(outputLength())
         scheduleExitCheck()
+    }
+
+    /**
+     * Length of the terminal's text, the attention check's "did the agent write anything"
+     * signal. `getText()` rebuilds the whole scrollback as a string, so it is only called
+     * when the buffer reported a change since the last read; an idle session, which is
+     * most of a session's life, costs a flag read. Widgets without a JediTerm buffer have
+     * no change events and are read every time. Runs on the EDT: `getText()` reads the
+     * UI-side buffer.
+     */
+    private fun outputLength(): Int {
+        // Clear the flag before reading: a write landing in between is then both in the
+        // text read now and flagged for the next check, never lost.
+        if (textBuffer == null || outputDirty.getAndSet(false)) {
+            lastOutputLength = widget.getText().length
+        }
+        return lastOutputLength
     }
 
     /** Pooled thread: probe the shell, then hop back to the EDT with the answer. */
@@ -269,15 +305,13 @@ class AgentTerminalView(
 
     companion object {
         private const val POLL_INTERVAL_MS = 150
-        // Slower cadence for the always-on exit watch (the deterministic close comes from
-        // addTerminationCallback; this poll is only a best-effort net), so it stays cheap.
-        private const val EXIT_POLL_INTERVAL_MS = 500
+        // The always-on per-session tick: the exit safety net plus the attention check.
+        // Slow on purpose, see checkExit. AttentionDecider's thresholds are counted in
+        // these ticks, so changing this changes how long "quiet" is.
+        private const val SESSION_POLL_INTERVAL_MS = 2_000
         // Consecutive not-running polls (after having seen the command run) required to
-        // treat the agent as exited; see checkExit.
-        private const val STOPPED_CONFIRM_POLLS = 3
-        // Run the attention check every Nth exit poll (so ~2s apart), keeping getText()
-        // off the twice-a-second path while still noticing a quiet agent promptly.
-        private const val ATTENTION_EVERY_N_POLLS = 4
+        // treat the agent as exited, i.e. about 4 s; see checkExit.
+        private const val STOPPED_CONFIRM_POLLS = 2
         private const val CARD_TERMINAL = "terminal"
         private const val CARD_LOADING = "loading"
     }

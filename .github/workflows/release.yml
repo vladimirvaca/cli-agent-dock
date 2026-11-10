@@ -57,12 +57,14 @@ jobs:
           echo "--- release notes ---"
           cat build/release_notes.md
 
-      - name: Build and sign plugin
+      # 'check' first: a tag can point at any commit, so the tests run here too and a
+      # failure stops the release before anything is signed or published.
+      - name: Test, build and sign plugin
         env:
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-        run: ./gradlew buildPlugin signPlugin
+        run: ./gradlew check buildPlugin signPlugin
 
       # Publish to Marketplace before creating the GitHub Release: a failed publish
       # aborts the release, while a failed 'gh release create' is easy to redo by hand.
