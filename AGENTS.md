@@ -27,7 +27,7 @@ one-click diffs (§4.5).
 
 ## 2. Current status
 
-**v0.7.0 is released** (2026-11-05) and the plugin is published on the
+**v0.8.0 is released** (2026-11-10) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -62,6 +62,12 @@ What's shipped, in order of arrival:
   refreshed Marketplace description and README. Also, not user-facing: a `runIdeLocal`
   Gradle task and a CI split that keeps the Plugin Verifier's IDEs out of the Actions
   cache (§7).
+- **v0.8.0** — **Cursor CLI** as a fifth agent, and a round of fixes and tuning: the
+  threading errors newer IDEs report (2026.2's EDT/read-action assertions from issue
+  #21, 2025.3's EDT-forbidden shell-path getter), the attention notice repeating after a
+  focus change, Send File Reference losing its text when it had to open a session, and
+  cheaper per-session background work (2 s poll, no scrollback copy while idle, one VFS
+  listener per project).
 
 **Current focus:** the "Later" ledger in §7. The agent catalog is five entries deep (Claude
 Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, Cursor CLI) and broadening it further is
@@ -563,6 +569,20 @@ branches anywhere in here.
       Verifier job (pushes to `main`, weekly, on demand; skipped on PRs). The verifier's
       five IDEs exceeded GitHub's 10 GB cache limit and evicted the build cache on every
       run; PR checks went from ~10–13 min to ~2.5 min.
+
+**Done in v0.8.0 (2026-11-10):**
+- [x] Cursor CLI as an enabled `AgentRegistry` entry (`cursor-agent`), with readiness
+      markers (§4.3), an icon and its installer's Windows dir in the resolver (§4.6).
+      Verified end-to-end on Windows, signed out and signed in.
+- [x] Terminal calls the platform now asserts on moved off the EDT: the
+      `isCommandRunning` probe (#21), stdin writes (`AgentInputWriter`, which also
+      replaced the deprecated `getTerminalStarter()`), and the shell-path read (§4.4).
+- [x] Attention notice no longer repeats after a focus repaint (§4.8).
+- [x] Send File Reference keeps its text when it has to open a session (§4.8).
+- [x] Performance: 2 s session poll, `getText()` only after a buffer change (§4.8),
+      `SessionChangeHub` as the single VFS listener, coalesced and no-op-skipping
+      Files changed updates (§4.5).
+- [x] CI: `release.yml` runs `check` before building and signing.
 
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
