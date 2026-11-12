@@ -91,8 +91,9 @@ class AgentTerminalView(
     /** Set from the terminal's emulator thread whenever the buffer changes. */
     private val outputDirty = AtomicBoolean(true)
 
-    /** Length of the terminal text as of the last time it was read; EDT only. */
+    /** Length and hash of the terminal text as of the last time it was read; EDT only. */
     private var lastOutputLength = 0
+    private var lastOutputHash = 0
 
     /** True once the terminal card is showing, i.e. the agent is up and can accept input. */
     private var revealed = false
@@ -169,25 +170,32 @@ class AgentTerminalView(
             ApplicationManager.getApplication().executeOnPooledThread(::probeCommandRunning)
         }
         // Attention rides this timer instead of adding a second one.
-        attention?.onCheck(outputLength())
+        attention?.let {
+            refreshOutputStamp()
+            it.onCheck(lastOutputLength, lastOutputHash)
+        }
         scheduleExitCheck()
     }
 
     /**
-     * Length of the terminal's text, the attention check's "did the agent write anything"
-     * signal. `getText()` rebuilds the whole scrollback as a string, so it is only called
-     * when the buffer reported a change since the last read; an idle session, which is
-     * most of a session's life, costs a flag read. Widgets without a JediTerm buffer have
-     * no change events and are read every time. Runs on the EDT: `getText()` reads the
-     * UI-side buffer.
+     * Refreshes the length and hash of the terminal's text, the attention check's "did
+     * the agent write anything" signal. The hash matters: a thinking agent animates in
+     * place, changing the text without changing its length. `getText()` rebuilds the
+     * whole scrollback as a string, so it is only called when the buffer reported a
+     * change since the last read; an idle session, which is most of a session's life,
+     * costs a flag read. The change event alone is not the signal — a TUI redrawing an
+     * identical screen writes without changing anything. Widgets without a JediTerm
+     * buffer have no change events and are read every time. Runs on the EDT: `getText()`
+     * reads the UI-side buffer.
      */
-    private fun outputLength(): Int {
+    private fun refreshOutputStamp() {
         // Clear the flag before reading: a write landing in between is then both in the
         // text read now and flagged for the next check, never lost.
         if (textBuffer == null || outputDirty.getAndSet(false)) {
-            lastOutputLength = widget.getText().length
+            val text = widget.getText()
+            lastOutputLength = text.length
+            lastOutputHash = text.hashCode()
         }
-        return lastOutputLength
     }
 
     /** Pooled thread: probe the shell, then hop back to the EDT with the answer. */

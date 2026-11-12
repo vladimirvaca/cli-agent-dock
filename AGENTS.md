@@ -444,7 +444,15 @@ branches anywhere in here.
 - **Attention is a quiet-period heuristic, by design.** Detecting "waiting for approval"
   exactly would mean parsing each agent's prompt — precisely the per-agent coupling this
   plugin avoids. Instead it watches the one agent-agnostic signal available: output stopped
-  arriving. It fires at most once per turn and re-arms on new output. "The user is
+  arriving. It fires at most once per turn and re-arms on new output. **Quiet means the
+  text is unchanged, not that its length is** (`AttentionDecider` takes length and hash):
+  a thinking agent redraws a spinner and an elapsed-time counter in place, so the length
+  can sit still for many seconds, and judging by length announced thinking agents as
+  waiting. The price is that an agent which animated forever while *waiting* would never
+  be announced (not checked against each agent's idle screen yet). **Only sustained output is a turn:** the notice
+  is armed once the output changed on two consecutive checks (`activeChecksToArm`). One
+  changed check is a repaint (a click into the terminal, a status line ticking) and
+  neither arms nor re-arms. "The user is
   watching" means all three of: the tool window is visible, the IDE window has focus
   (`isDockOnScreen`), and this session is the selected tab — so a background tab finishing,
   or the IDE sitting behind a browser, both *do* get announced. Checking visibility alone
@@ -455,10 +463,15 @@ branches anywhere in here.
   repaint when focus moves (focus in/out reporting, re-layout), which changes it without
   the agent doing anything. Counting that as new output re-armed the notice, so leaving
   an idle session that had been seen or announced announced it again. `AttentionDecider`
-  therefore takes a `focusChanged` flag (watching state or `Application.isActive`
-  flipped since the last check). When it flips on a session already quiet for
-  `idleChecksRequired` checks, changes in the next `settleChecks` checks (~4s) only move
-  the baseline. A turn that is still producing output when focus moves is not affected.
+  therefore takes a `focusChanged` flag. After any focus change, changes in the next
+  `settleChecks` checks (~4s) only move the baseline: they count neither as output nor
+  as quiet, so a turn in progress when the user leaves stays armed and a thinking agent
+  is not announced inside the window. The flag is the sampled state (watching,
+  `Application.isActive`) flipping between checks **or** an
+  `ApplicationActivationListener` event since the last one — sampling alone misses a
+  visit that starts and ends between two checks, which still repaints twice. The same
+  listener records a `glanced` look at the session, so a visit shorter than the poll
+  counts as having seen it.
 - **It reaches outside the IDE too.** An IntelliJ balloon only renders inside the IDE
   window, so a user in a browser would never see it. Each notice therefore also calls
   `SystemNotifications.getInstance().notify(...)` — a Windows toast, macOS Notification
@@ -471,12 +484,12 @@ branches anywhere in here.
   `!Application.isActive`, since unlike `SystemNotifications` it would otherwise fire
   while the user is working in the IDE.
 - **It reuses the existing timer.** The check rides `AgentTerminalView`'s 2 s session
-  poll rather than adding a second `Alarm`. It needs the output length, and `getText()`
-  materializes the whole scrollback, so the view listens to the JediTerm buffer
-  (`TerminalTextBuffer.addModelListener`, a flag flip on the emulator thread) and only
-  calls `getText()` when something was written since the last check. The signal is still
-  the length, not the change event: switching it would make an agent that animates while
-  it waits look busy forever. Keep it that way (§5, "mind the hot paths").
+  poll rather than adding a second `Alarm`. It needs the output's length and hash, and
+  `getText()` materializes the whole scrollback, so the view listens to the JediTerm
+  buffer (`TerminalTextBuffer.addModelListener`, a flag flip on the emulator thread) and
+  only calls `getText()` when something was written since the last check. The signal is
+  the text, not the change event: a TUI redrawing an identical screen writes without
+  changing anything. Keep it that way (§5, "mind the hot paths").
 
 ---
 

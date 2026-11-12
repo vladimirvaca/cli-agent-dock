@@ -423,6 +423,7 @@ class CliAgentDockToolWindowPanel(
             // case worth announcing.
             val attention = AgentAttentionWatcher(
                 project = project,
+                parentDisposable = sessionDisposable,
                 sessionTitle = { title },
                 isUserWatching = {
                     AgentDockService.getInstance(project).isDockOnScreen() && currentSession() === this
