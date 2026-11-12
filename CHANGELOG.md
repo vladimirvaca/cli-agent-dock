@@ -4,11 +4,12 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-12
+
 ### Fixed
 
 - **A thinking agent is no longer announced as "waiting"** — the dock decided an agent had gone quiet by watching whether the amount of text in its terminal changed. While an agent thinks it redraws a spinner and a timer in place, so the text changes but its amount doesn't, and after a few seconds the dock said the agent was waiting for you. It now looks at the text itself, so an agent that is still animating counts as busy.
 - **No more "agent is waiting" for a turn you already looked at** — coming back to the dock, clicking into the terminal and switching to another app again could bring the notification back, because the agent redraws its screen on each of those and the dock took a redraw for a new turn. A new turn now has to produce output for a couple of seconds before it can be announced, a single redraw is ignored, and a visit shorter than the dock's 2-second check still counts as having seen the result. A turn that starts and ends within about 2 seconds while you are away is no longer announced.
-
 - **Files changed panel no longer flashes entries in and out** — a file showed up the moment the agent wrote it and was removed about a second later if Git then reported it as ignored (`.gitignore`d caches, logs, an agent's own settings folder) or as unchanged (rewritten with the same content, or a temp file already gone). When it was the only entry the whole panel popped open and shut, resizing the terminal each time. A change is now listed once the VCS confirms it, so those files never appear; real changes show up a moment later than before, already carrying their `untracked` tag where it applies. A file the VCS hasn't ruled on within 5 seconds is shown anyway.
 
 ## [0.8.0] - 2026-11-10
@@ -120,7 +121,8 @@
 - Running IDE product/version/build shown in the tool window and logs.
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
 
-[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/vladimirvaca/cli-agent-dock/compare/v0.5.0...v0.6.0

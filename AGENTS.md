@@ -27,7 +27,7 @@ one-click diffs (§4.5).
 
 ## 2. Current status
 
-**v0.8.0 is released** (2026-11-10) and the plugin is published on the
+**v0.8.1 is released** (2026-11-12) and the plugin is published on the
 [JetBrains Marketplace (id 32765)](https://plugins.jetbrains.com/plugin/32765).
 What's shipped, in order of arrival:
 
@@ -68,6 +68,9 @@ What's shipped, in order of arrival:
   focus change, Send File Reference losing its text when it had to open a session, and
   cheaper per-session background work (2 s poll, no scrollback copy while idle, one VFS
   listener per project).
+- **v0.8.1** — two fixes, no new behavior: the Files changed panel no longer flashes
+  entries in and out (changes wait for a VCS verdict, §4.5), and "agent is waiting"
+  no longer fires for a thinking agent or for a turn already looked at (§4.8).
 
 **Current focus:** the "Later" ledger in §7. The agent catalog is five entries deep (Claude
 Code, GitHub Copilot CLI, OpenAI Codex CLI, OpenCode, Cursor CLI) and broadening it further is
@@ -607,6 +610,15 @@ branches anywhere in here.
       `SessionChangeHub` as the single VFS listener, coalesced and no-op-skipping
       Files changed updates (§4.5).
 - [x] CI: `release.yml` runs `check` before building and signing.
+
+**Done in v0.8.1 (2026-11-12):**
+- [x] Files changed entries stay pending until a `ChangeListManager` update confirms
+      them, so git-ignored, unchanged and short-lived files are never listed and the
+      panel no longer opens and shuts around them (§4.5).
+- [x] Attention: quiet is judged by the terminal text (length and hash) rather than its
+      length, a notice needs output on two consecutive checks, and IDE activation events
+      catch visits shorter than the poll (§4.8). Not yet verified in a running IDE
+      against each agent.
 
 **Later:**
 - Per-agent config (model, flags, env) — note `Agent.args` already exists and no registry
