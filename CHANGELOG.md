@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Files changed panel no longer flashes entries in and out** — a file showed up the moment the agent wrote it and was removed about a second later if Git then reported it as ignored (`.gitignore`d caches, logs, an agent's own settings folder) or as unchanged (rewritten with the same content, or a temp file already gone). When it was the only entry the whole panel popped open and shut, resizing the terminal each time. A change is now listed once the VCS confirms it, so those files never appear; real changes show up a moment later than before, already carrying their `untracked` tag where it applies. A file the VCS hasn't ruled on within 5 seconds is shown anyway.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

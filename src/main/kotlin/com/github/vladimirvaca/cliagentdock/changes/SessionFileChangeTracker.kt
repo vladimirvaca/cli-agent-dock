@@ -53,6 +53,12 @@ data class ChangedFile(val path: String, val kind: ChangeKind)
  * commit (or revert) looks like from here — are pruned, so committing the session's
  * changes clears the panel without anyone pressing the clear button.
  *
+ * A change is **held back until the VCS has had its say** (see [pending]). A VFS event
+ * alone cannot tell reviewable work from noise — a write to a git-ignored file, a file
+ * rewritten with identical content, a temp file that is gone a moment later — and the
+ * VCS would have such an entry pruned about a second after it was shown, which made
+ * rows (and, when it was the only row, the whole panel) flash in and out.
+ *
  * VFS events arrive through the project's [SessionChangeHub] — one listener however many
  * sessions are open — for as long as [parentDisposable] lives, so tracking stops with the
  * session (close or restart). [onChanged] receives the full cumulative snapshot after
@@ -94,6 +100,24 @@ class SessionFileChangeTracker(
      * for and stays listed as the session's record of it.
      */
     private val deletionsSeenByVcs = HashSet<String>()
+
+    /**
+     * Recorded paths not reported to [onChanged] yet, with the `nanoTime` they were first
+     * recorded. An entry leaves this map — becomes visible — once a VCS update confirms
+     * it as a real change, when its path has no VCS at all, or after [PENDING_REVEAL_MS]
+     * as a safety net for a VCS that isn't updating. An entry the VCS turns down instead
+     * (ignored, or clean) is dropped without ever having been shown.
+     */
+    private val pending = HashMap<String, Long>()
+
+    /**
+     * Paths the VCS reported clean (or, for a deletion, unknown) once already, and that
+     * were then marked dirty by [reconcileWithVcs] to get a verdict that is certain to
+     * postdate the recorded change. The platform marks changed files dirty
+     * asynchronously, so a VCS update finishing right after a VFS event can call a file
+     * clean simply because it never looked at it; acting on that would lose the entry.
+     */
+    private val cleanVerified = HashSet<String>()
 
     private val refreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
 
@@ -147,6 +171,7 @@ class SessionFileChangeTracker(
     private fun scheduleRefreshNudge() {
         refreshAlarm.addRequest({
             nudgeIfDue()
+            revealOverdue()
             scheduleRefreshNudge()
         }, REFRESH_NUDGE_MS)
     }
@@ -154,69 +179,127 @@ class SessionFileChangeTracker(
     /** Forgets everything recorded so far and notifies with an empty snapshot. */
     fun clear() {
         deletionsSeenByVcs.clear()
+        pending.clear()
+        cleanVerified.clear()
         if (changes.isEmpty()) return
         changes.clear()
         fireChanged()
     }
 
     /**
-     * Reconciles the recorded changes with what the VCS now reports: entries it considers
-     * clean again were committed (or reverted) and leave the list. Fires even when nothing
-     * was pruned — per-file VCS statuses feeding the panel (its "untracked" tags) may have
-     * changed with this same update, e.g. after a `git add`.
+     * Runs after every [ChangeListManager] update. Fires even when nothing was pruned or
+     * revealed — per-file VCS statuses feeding the panel (its "untracked" tags) may have
+     * changed with this same update, e.g. after a `git add`; the panel skips a snapshot
+     * that changes nothing.
      */
     private fun onVcsStateSettled() {
         if (changes.isEmpty()) return
-        pruneCommitted()
+        reconcileWithVcs()
         fireChanged()
     }
 
-    private fun pruneCommitted() {
+    /**
+     * Reconciles the recorded changes with what the VCS now reports. Entries it shows as
+     * changed are confirmed (a [pending] one becomes visible); entries it considers
+     * ignored or clean leave the list — for a visible entry that is a commit or revert,
+     * for a pending one it means there was never anything to review.
+     */
+    private fun reconcileWithVcs() {
         val changeListManager = ChangeListManager.getInstance(project)
         val vcsManager = ProjectLevelVcsManager.getInstance(project)
         val fileSystem = LocalFileSystem.getInstance()
 
         val prunable = ArrayList<String>()
-        // Clean-looking files still awaiting a VCS rescan must not be pruned yet: their
-        // change was recorded, but the CLM update that just finished predates it.
-        val cleanLooking = ArrayList<Pair<String, FilePath>>()
+        val confirmed = ArrayList<String>()
+        // No pending change in the VCS — but that only counts once the VCS has certainly
+        // looked at the file after the change was recorded (see [cleanVerified]).
+        val cleanLooking = ArrayList<Pair<ChangedFile, FilePath>>()
 
         for (entry in changes.values) {
             val filePath = vcsContextFactory.createFilePath(entry.path, false)
             // No VCS root here (or no VCS at all): nothing ever gets committed, keep it.
-            if (vcsManager.getVcsFor(filePath) == null) continue
+            if (vcsManager.getVcsFor(filePath) == null) {
+                confirmed.add(entry.path)
+                continue
+            }
             if (entry.kind == ChangeKind.DELETED) {
-                if (changeListManager.getChange(filePath) != null) {
-                    deletionsSeenByVcs.add(entry.path)
-                } else if (entry.path in deletionsSeenByVcs) {
-                    prunable.add(entry.path)
+                when {
+                    changeListManager.getChange(filePath) != null -> {
+                        deletionsSeenByVcs.add(entry.path)
+                        confirmed.add(entry.path)
+                    }
+                    entry.path in deletionsSeenByVcs -> prunable.add(entry.path)
+                    // A deletion the VCS has no change for: an untracked file, or the
+                    // VCS hasn't caught up. Only a still-hidden entry needs that settled.
+                    entry.path in pending -> cleanLooking.add(entry to filePath)
                 }
             } else {
                 val file = fileSystem.findFileByPath(entry.path) ?: continue
                 when (changeListManager.getStatus(file)) {
-                    // Ignored now (e.g. a .gitignore the agent wrote mid-session caught
-                    // up with files recorded earlier): not reviewable work, drop it.
+                    // Ignored (the hub's check at event time is only approximate and
+                    // knows nothing of .gitignore): not reviewable work, drop it.
                     FileStatus.IGNORED -> prunable.add(entry.path)
-                    FileStatus.NOT_CHANGED -> cleanLooking.add(entry.path to filePath)
-                    else -> {}
+                    FileStatus.NOT_CHANGED -> cleanLooking.add(entry to filePath)
+                    else -> {
+                        confirmed.add(entry.path)
+                        cleanVerified.remove(entry.path)
+                    }
                 }
             }
         }
 
         if (cleanLooking.isNotEmpty()) {
-            val stillDirty = VcsDirtyScopeManager.getInstance(project)
-                .whatFilesDirty(cleanLooking.map { it.second })
-                .toSet()
-            cleanLooking.filter { it.second !in stillDirty }.mapTo(prunable) { it.first }
+            val dirtyScopeManager = VcsDirtyScopeManager.getInstance(project)
+            val stillDirty = dirtyScopeManager.whatFilesDirty(cleanLooking.map { it.second }).toSet()
+            val recheck = ArrayList<FilePath>()
+            for ((entry, filePath) in cleanLooking) {
+                when {
+                    // Awaiting a VCS rescan: the update that just finished predates it.
+                    filePath in stillDirty -> {}
+                    // First clean verdict: ask for one that is sure to cover the change.
+                    cleanVerified.add(entry.path) -> recheck.add(filePath)
+                    // Second one. An untracked file's deletion stays as the session's
+                    // record of it; anything else was committed, reverted or never differed.
+                    entry.kind == ChangeKind.DELETED -> confirmed.add(entry.path)
+                    else -> prunable.add(entry.path)
+                }
+            }
+            if (recheck.isNotEmpty()) dirtyScopeManager.filePathsDirty(recheck, null)
         }
 
-        for (path in prunable) {
-            changes.remove(path)
-            deletionsSeenByVcs.remove(path)
-        }
+        for (path in prunable) forget(path)
+        for (path in confirmed) pending.remove(path)
         if (prunable.isNotEmpty()) {
-            thisLogger().info("Pruned ${prunable.size} committed entr${if (prunable.size == 1) "y" else "ies"}")
+            thisLogger().info("Pruned ${prunable.size} entries the VCS reports clean or ignored")
         }
+    }
+
+    /** Reveals [pending] entries on paths no VCS covers: no verdict will ever come for them. */
+    private fun revealUnversioned() {
+        if (pending.isEmpty()) return
+        val vcsManager = ProjectLevelVcsManager.getInstance(project)
+        pending.keys.removeIf { vcsManager.getVcsFor(vcsContextFactory.createFilePath(it, false)) == null }
+    }
+
+    /**
+     * Safety net, on the refresh tick: a [pending] entry the VCS hasn't ruled on within
+     * [PENDING_REVEAL_MS] (updates paused during a long git operation, a huge repository)
+     * is shown anyway — a late or flickering row beats a change that never appears.
+     */
+    private fun revealOverdue() {
+        if (pending.isEmpty()) return
+        val deadline = System.nanoTime() - TimeUnit.MILLISECONDS.toNanos(PENDING_REVEAL_MS.toLong())
+        if (pending.values.removeIf { it <= deadline }) fireChanged()
+    }
+
+    private fun isShown(path: String): Boolean = path in changes && path !in pending
+
+    /** Drops everything known about [path], returning the entry it had, if any. */
+    private fun forget(path: String): ChangedFile? {
+        pending.remove(path)
+        cleanVerified.remove(path)
+        deletionsSeenByVcs.remove(path)
+        return changes.remove(path)
     }
 
     /**
@@ -250,8 +333,16 @@ class SessionFileChangeTracker(
 
     private fun record(path: String, incoming: ChangeKind, isIgnored: (String) -> Boolean): Boolean {
         if (!isTracked(path, isIgnored)) return false
+        val shown = isShown(path)
         val merged = merge(changes[path]?.kind, incoming)
-        if (merged == null) changes.remove(path) else changes[path] = ChangedFile(path, merged)
+        // Any earlier clean verdict is void now.
+        cleanVerified.remove(path)
+        if (merged == null) {
+            forget(path)
+            return true
+        }
+        changes[path] = ChangedFile(path, merged)
+        if (!shown) pending.putIfAbsent(path, System.nanoTime())
         // A file that exists again (recreated after a delete) starts a fresh VCS story.
         if (merged != ChangeKind.DELETED) deletionsSeenByVcs.remove(path)
         return true
@@ -259,16 +350,22 @@ class SessionFileChangeTracker(
 
     /** A rename/move shows up under the new path, keeping what we knew about the old one. */
     private fun recordMoved(oldPath: String, newPath: String, isIgnored: (String) -> Boolean): Boolean {
-        val prior = changes.remove(oldPath)
+        // An entry already on screen stays on screen under its new path.
+        val priorShown = isShown(oldPath)
+        val prior = forget(oldPath)
         return when {
             isTracked(newPath, isIgnored) -> {
+                val shown = priorShown || isShown(newPath)
                 changes[newPath] = ChangedFile(newPath, prior?.kind ?: ChangeKind.MODIFIED)
+                cleanVerified.remove(newPath)
+                if (shown) pending.remove(newPath) else pending.putIfAbsent(newPath, System.nanoTime())
                 true
             }
             // Moved out of the project: gone from the project's point of view, unless the
             // session itself created it (then created+removed nets out to nothing).
             isTracked(oldPath, isIgnored) && prior?.kind != ChangeKind.CREATED -> {
                 changes[oldPath] = ChangedFile(oldPath, ChangeKind.DELETED)
+                if (!priorShown) pending[oldPath] = System.nanoTime()
                 true
             }
             else -> prior != null
@@ -295,7 +392,7 @@ class SessionFileChangeTracker(
      * (build output, caches — whatever .gitignore and the IDE's ignore providers
      * cover) are side effects of the agent's work, not reviewable work, so they never
      * enter the list. The ignore check ([SessionChangeHub]) is fast-but-approximate by
-     * contract; [pruneCommitted] holds the precise complement, dropping entries the VCS
+     * contract; [reconcileWithVcs] holds the precise complement, dropping entries the VCS
      * itself later reports as ignored. It runs last, after the cheap string checks.
      */
     private fun isTracked(path: String, isIgnored: (String) -> Boolean): Boolean =
@@ -317,7 +414,8 @@ class SessionFileChangeTracker(
         ApplicationManager.getApplication().invokeLater(
             {
                 notifyQueued = false
-                val snapshot = changes.values.toList()
+                revealUnversioned()
+                val snapshot = changes.values.filter { it.path !in pending }
                 thisLogger().debug("Session changed files updated: ${snapshot.size} entries")
                 onChanged(snapshot)
             },
@@ -328,6 +426,9 @@ class SessionFileChangeTracker(
     companion object {
         /** How often to nudge a VFS refresh while the session runs. */
         private const val REFRESH_NUDGE_MS = 2_000
+
+        /** How long a change waits for a VCS verdict before it is shown regardless. */
+        private const val PENDING_REVEAL_MS = 5_000
 
         /** Tolerance for file-system timestamp granularity in [predatesSession]. */
         private const val TIMESTAMP_SLACK_MS = 2_000
