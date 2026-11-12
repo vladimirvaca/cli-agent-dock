@@ -329,6 +329,17 @@ Registered in `plugin.xml` with `anchor="right"` (alongside Database, Gradle, et
   as refresh events, while the user's own editor saves/refactorings don't carry that flag
   and are excluded. Trade-off: any external writer during the session (another agent tab,
   a `git pull` elsewhere) is attributed too. `.git/` internals are filtered out.
+- **Entries wait for a VCS verdict.** A VFS event cannot tell reviewable work from noise:
+  the hub's ignore check is approximate and knows nothing of `.gitignore`, and a file
+  rewritten with identical content or a temp file looks the same as a real edit. Showing
+  such an entry and pruning it a second later made rows flash, and when it was the only
+  row the whole panel opened and shut, resizing the terminal. So a new entry is `pending`
+  (recorded, not reported) until a `ChangeListManager` update confirms it; ignored or
+  clean ones are dropped unseen. Paths with no VCS are revealed at once, and anything
+  unruled after 5 s (`PENDING_REVEAL_MS`, checked on the refresh tick) is shown anyway.
+  A "clean" verdict is only acted on the second time: the platform marks files dirty
+  asynchronously, so the first one may predate the change — the tracker marks the path
+  dirty itself (`cleanVerified`) and waits for the next update.
 - **Clean start:** changes made while the IDE was closed replay as refresh events on the
   first refresh after startup, so the tracker refreshes the project root first (a baseline
   pass that absorbs the backlog) and subscribes only when it completes — a new session
